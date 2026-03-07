@@ -44,10 +44,12 @@ function BookViewerContent() {
       if (pending) {
         try {
           const parsed = JSON.parse(pending) as BookData;
-          sessionStorage.removeItem(PENDING_BOOK_KEY);
           setBook(parsed);
-          saveBookToHistory(parsed);
+          saveBookToHistory(parsed).finally(() => {
+            sessionStorage.removeItem(PENDING_BOOK_KEY);
+          });
         } catch {
+          sessionStorage.removeItem(PENDING_BOOK_KEY);
           getBookHistory().then((history) => setBook(history[0] ?? null));
         }
         return;

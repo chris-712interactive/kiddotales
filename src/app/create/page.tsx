@@ -44,18 +44,21 @@ const ART_STYLE_CARDS = [
     label: "Pixar-style 3D",
     description: "Vibrant & expressive",
     gradient: "from-amber-200 to-orange-200 dark:from-amber-900/30 dark:to-orange-900/30",
+    image: "/artStyles/pixar3D.png",
   },
   {
     id: "hand-drawn-classic",
     label: "Hand-drawn Classic",
     description: "Vintage storybook feel",
     gradient: "from-amber-100 to-yellow-100 dark:from-amber-900/20 dark:to-yellow-900/20",
+    image: "/artStyles/handDrawnClassic.png",
   },
   {
     id: "vibrant-cartoon",
     label: "Vibrant Cartoon",
     description: "Bold & playful",
     gradient: "from-green-200 to-teal-200 dark:from-green-900/30 dark:to-teal-900/30",
+    image: "/artStyles/vibrantCartoon.png",
   },
 ];
 
@@ -448,7 +451,7 @@ export default function CreatePage() {
                         setForm((prev) => ({ ...prev, artStyle: style.id }))
                       }
                     >
-                      <div className="h-20 rounded-t-xl overflow-hidden">
+                      <div className="h-40 rounded-t-xl overflow-hidden">
                         {style.image ? (
                           <img
                             src={style.image}

@@ -90,8 +90,14 @@ export async function POST(request: NextRequest) {
       artStyle: artStyle || "whimsical-watercolor",
     });
 
+    const systemPrompt = STORY_SYSTEM_PROMPT
+      .replace("[AGE]", String(age || 5))
+      .replace("[PRONOUNS]", pronouns || "they/them")
+      .replace("[NAME]", childName)
+      .replace("[INTERESTS]", interests?.join(", ") || "")
+      .replace("[LESSON]", lifeLesson || "kindness");
     const messages = [
-      { role: "system" as const, content: STORY_SYSTEM_PROMPT },
+      { role: "system" as const, content: systemPrompt },
       { role: "user" as const, content: userPrompt },
     ];
     const createParams = {
@@ -137,7 +143,7 @@ export async function POST(request: NextRequest) {
       throw new Error("No story content from OpenAI");
     }
 
-    let parsed: { title: string; pages: BookPage[]; coverImagePrompt?: string };
+    let parsed: { title: string; pages: BookPage[]; coverImagePrompt?: string; characterDescription?: string };
     try {
       parsed = JSON.parse(content);
     } catch {
@@ -152,6 +158,14 @@ export async function POST(request: NextRequest) {
 
     const styleSuffix = ART_STYLE_PROMPTS[artStyle] || ART_STYLE_PROMPTS["whimsical-watercolor"];
 
+    // Character consistency: prepend same description to every image prompt
+    const isGirl = /she\/her|girl/i.test(pronouns || "");
+    const isBoy = /he\/him|boy/i.test(pronouns || "");
+    const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
+    const characterPrefix =
+      parsed.characterDescription?.trim() ||
+      `A ${age || 5}-year-old ${genderPhrase} named ${childName}, children's book illustration style.`;
+
     // 2. Generate cover image first, then page images (throttled: free tier = 6 req/min)
     console.log("[KiddoTales] OpenAI done, starting Replicate (cover + 8 images, throttled)...");
     let coverImageUrl = "";
@@ -159,7 +173,7 @@ export async function POST(request: NextRequest) {
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
-    const fullCoverPrompt = `${coverPrompt}. ${styleSuffix}`;
+    const fullCoverPrompt = `${characterPrefix}. ${coverPrompt}. ${styleSuffix}`;
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
@@ -194,7 +208,7 @@ export async function POST(request: NextRequest) {
       }
       const page = parsed.pages[i];
       const promptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
-      const fullPrompt = `${promptText}. ${styleSuffix}`;
+      const fullPrompt = `${characterPrefix}. ${promptText}. ${styleSuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const output = await replicate.run(

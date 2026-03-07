@@ -137,11 +137,15 @@ export default function LandingPage() {
             <h2 className="mb-4 text-center text-2xl font-semibold text-foreground">
               Your recent books
             </h2>
-            <div className="flex flex-wrap justify-center gap-3">
+            <div className="flex flex-wrap justify-start gap-5">
               {history.map((book) => (
-                <Link key={book.createdAt} href={`/book?createdAt=${encodeURIComponent(book.createdAt)}`}>
+                <Link 
+                  key={book.createdAt} 
+                  href={`/book?createdAt=${encodeURIComponent(book.createdAt)}`}
+                  className="w-full"
+                >
                   <motion.div
-                    className="flex flex-col overflow-hidden rounded-xl border-2 border-border bg-card shadow-md"
+                    className="flex flex-row items-center overflow-hidden rounded-xl border-2 border-border bg-card shadow-md w-full"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >

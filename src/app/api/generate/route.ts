@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
         try {
           const output = await replicate.run(
             "black-forest-labs/flux-schnell" as `${string}/${string}`,
-            { input: { prompt: fullPrompt, num_outputs: 1 } }
+            { input: { prompt: fullPrompt, num_outputs: 1, output_format: "png" } }
           );
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {

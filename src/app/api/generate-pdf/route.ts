@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, rgb } from "pdf-lib";
+import sharp from "sharp";
 import type { BookData } from "@/types";
 
 const PAGE_WIDTH = 595; // A4 points (72 dpi)
@@ -48,12 +49,14 @@ export async function POST(request: NextRequest) {
           });
           if (res.ok) {
             const arrayBuffer = await res.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
+            let bytes = new Uint8Array(arrayBuffer);
             const contentType = (res.headers.get("content-type") || "").toLowerCase();
             if (contentType.includes("webp")) {
-              throw new Error("WebP not supported by pdf-lib");
+              bytes = new Uint8Array(
+                await sharp(Buffer.from(bytes)).png().toBuffer()
+              );
             }
-            const image = contentType.includes("png")
+            const image = contentType.includes("png") || contentType.includes("webp")
               ? await pdfDoc.embedPng(bytes)
               : await pdfDoc.embedJpg(bytes);
             const dims = image.scaleToFit(IMAGE_WIDTH, IMAGE_HEIGHT);

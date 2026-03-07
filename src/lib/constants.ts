@@ -37,6 +37,7 @@ export const getStoryUserPrompt = (params: {
   interests: string[];
   lifeLesson: string;
   artStyle: string;
+  appearance?: { hairColor?: string; hairStyle?: string; skinTone?: string; eyeColor?: string; glasses?: boolean; freckles?: boolean };
 }) => {
   const artStyleDescriptions: Record<string, string> = {
     "whimsical-watercolor": "soft watercolor illustrations with dreamy, flowing colors",
@@ -45,6 +46,18 @@ export const getStoryUserPrompt = (params: {
     "vibrant-cartoon": "bright, bold cartoon style with clean lines",
   };
 
+  const appearanceParts: string[] = [];
+  if (params.appearance?.hairColor) appearanceParts.push(`${params.appearance.hairColor} hair`);
+  if (params.appearance?.hairStyle) appearanceParts.push(params.appearance.hairStyle);
+  if (params.appearance?.skinTone) appearanceParts.push(`${params.appearance.skinTone} skin`);
+  if (params.appearance?.eyeColor) appearanceParts.push(`${params.appearance.eyeColor} eyes`);
+  if (params.appearance?.glasses) appearanceParts.push("glasses");
+  if (params.appearance?.freckles) appearanceParts.push("freckles");
+  const appearanceLine =
+    appearanceParts.length > 0
+      ? `\n- Character appearance (use in characterDescription): ${appearanceParts.join(", ")}`
+      : "";
+
   return `Create a personalized bedtime story with these details:
 
 - Child's name: ${params.childName}
@@ -52,7 +65,7 @@ export const getStoryUserPrompt = (params: {
 - Pronouns: ${params.pronouns}
 - Interests: ${params.interests.join(", ")}
 - Life lesson to teach: ${params.lifeLesson}
-- Art style for images: ${artStyleDescriptions[params.artStyle] || params.artStyle}
+- Art style for images: ${artStyleDescriptions[params.artStyle] || params.artStyle}${appearanceLine}
 
 Generate the complete story as JSON. Remember: exactly 8 pages, each with text and a detailed imagePrompt.`;
 };

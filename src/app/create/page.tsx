@@ -28,6 +28,10 @@ import {
   GENDERS,
   INTERESTS,
   LIFE_LESSONS,
+  HAIR_COLORS,
+  HAIR_STYLES,
+  SKIN_TONES,
+  EYE_COLORS,
   type CreateFormData,
 } from "@/types";
 
@@ -70,6 +74,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
     interests: ["unicorns", "ballet", "forest"],
     lifeLesson: "bravery",
     artStyle: "whimsical-watercolor",
+    appearance: {},
   },
   {
     childName: "Max",
@@ -78,6 +83,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
     interests: ["dinosaurs", "space", "robots"],
     lifeLesson: "friendship",
     artStyle: "pixar-3d",
+    appearance: {},
   },
   {
     childName: "River",
@@ -86,6 +92,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
     interests: ["ocean", "superheroes", "princesses"],
     lifeLesson: "kindness",
     artStyle: "vibrant-cartoon",
+    appearance: {},
   },
 ];
 
@@ -102,6 +109,7 @@ export default function CreatePage() {
     interests: [],
     lifeLesson: "kindness",
     artStyle: "whimsical-watercolor",
+    appearance: {},
   });
 
   const [customInterest, setCustomInterest] = useState("");
@@ -349,6 +357,134 @@ export default function CreatePage() {
                     {gender.label}
                   </Button>
                 ))}
+              </div>
+            </div>
+
+            {/* Optional: Character appearance */}
+            <div className="space-y-3 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+              <div>
+                <Label className="text-muted-foreground">Character appearance (optional)</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Add details to make the character look more like your child in the illustrations
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="space-y-1">
+                  <Label htmlFor="hairColor" className="text-xs">Hair color</Label>
+                  <Select
+                    id="hairColor"
+                    value={form.appearance?.hairColor ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appearance: {
+                          ...prev.appearance,
+                          hairColor: e.target.value || undefined,
+                        },
+                      }))
+                    }
+                  >
+                    {HAIR_COLORS.map((o) => (
+                      <option key={o.value || "any"} value={o.value}>{o.label}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="hairStyle" className="text-xs">Hair style</Label>
+                  <Select
+                    id="hairStyle"
+                    value={form.appearance?.hairStyle ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appearance: {
+                          ...prev.appearance,
+                          hairStyle: e.target.value || undefined,
+                        },
+                      }))
+                    }
+                  >
+                    {HAIR_STYLES.map((o) => (
+                      <option key={o.value || "any"} value={o.value}>{o.label}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="skinTone" className="text-xs">Skin tone</Label>
+                  <Select
+                    id="skinTone"
+                    value={form.appearance?.skinTone ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appearance: {
+                          ...prev.appearance,
+                          skinTone: e.target.value || undefined,
+                        },
+                      }))
+                    }
+                  >
+                    {SKIN_TONES.map((o) => (
+                      <option key={o.value || "any"} value={o.value}>{o.label}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="eyeColor" className="text-xs">Eye color</Label>
+                  <Select
+                    id="eyeColor"
+                    value={form.appearance?.eyeColor ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appearance: {
+                          ...prev.appearance,
+                          eyeColor: e.target.value || undefined,
+                        },
+                      }))
+                    }
+                  >
+                    {EYE_COLORS.map((o) => (
+                      <option key={o.value || "any"} value={o.value}>{o.label}</option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.appearance?.glasses ?? false}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appearance: {
+                          ...prev.appearance,
+                          glasses: e.target.checked || undefined,
+                        },
+                      }))
+                    }
+                    className="rounded border-muted-foreground/50"
+                  />
+                  <span className="text-sm">Glasses</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.appearance?.freckles ?? false}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appearance: {
+                          ...prev.appearance,
+                          freckles: e.target.checked || undefined,
+                        },
+                      }))
+                    }
+                    className="rounded border-muted-foreground/50"
+                  />
+                  <span className="text-sm">Freckles</span>
+                </label>
               </div>
             </div>
 

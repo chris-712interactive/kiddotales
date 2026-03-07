@@ -5,7 +5,7 @@ import {
   getStoryUserPrompt,
   ART_STYLE_PROMPTS,
 } from "@/lib/constants";
-import type { BookData, BookPage } from "@/types";
+import type { BookData, BookPage, CharacterAppearance } from "@/types";
 import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
 
 const openai = new OpenAI({
@@ -15,6 +15,37 @@ const openai = new OpenAI({
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
+
+/** Builds character description from optional parent-selected appearance. */
+function buildAppearancePrefix(
+  childName: string,
+  age: number,
+  pronouns: string,
+  appearance?: CharacterAppearance
+): string | null {
+  if (!appearance || typeof appearance !== "object") return null;
+  const a = appearance as Record<string, unknown>;
+  const hasAny =
+    a.hairColor || a.hairStyle || a.skinTone || a.eyeColor || a.glasses || a.freckles;
+  if (!hasAny) return null;
+
+  const isGirl = /she\/her|girl/i.test(pronouns || "");
+  const isBoy = /he\/him|boy/i.test(pronouns || "");
+  const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
+  const parts: string[] = [`A ${age}-year-old ${genderPhrase} named ${childName}`];
+
+  const hair: string[] = [];
+  if (a.hairColor && typeof a.hairColor === "string") hair.push(a.hairColor);
+  if (a.hairStyle && typeof a.hairStyle === "string") hair.push(a.hairStyle);
+  if (hair.length) parts.push(`${hair.join(" ")} hair`);
+
+  if (a.skinTone && typeof a.skinTone === "string") parts.push(`${a.skinTone} skin`);
+  if (a.eyeColor && typeof a.eyeColor === "string") parts.push(`${a.eyeColor} eyes`);
+  if (a.glasses) parts.push("wearing glasses");
+  if (a.freckles) parts.push("freckles");
+
+  return parts.join(", ") + ", children's book illustration style.";
+}
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
 async function createCompletionWithRetry(
@@ -57,7 +88,8 @@ export async function POST(request: NextRequest) {
       interests,
       lifeLesson,
       artStyle,
-    } = body;
+      appearance,
+    } = body as { appearance?: CharacterAppearance } & typeof body;
 
     if (!childName || !interests?.length) {
       return NextResponse.json(
@@ -88,6 +120,7 @@ export async function POST(request: NextRequest) {
       interests,
       lifeLesson: lifeLesson || "kindness",
       artStyle: artStyle || "whimsical-watercolor",
+      appearance,
     });
 
     const systemPrompt = STORY_SYSTEM_PROMPT
@@ -159,10 +192,18 @@ export async function POST(request: NextRequest) {
     const styleSuffix = ART_STYLE_PROMPTS[artStyle] || ART_STYLE_PROMPTS["whimsical-watercolor"];
 
     // Character consistency: prepend same description to every image prompt
+    // Parent-selected appearance overrides GPT's characterDescription when provided
+    const appearancePrefix = buildAppearancePrefix(
+      childName,
+      age || 5,
+      pronouns || "",
+      appearance
+    );
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
     const characterPrefix =
+      appearancePrefix ||
       parsed.characterDescription?.trim() ||
       `A ${age || 5}-year-old ${genderPhrase} named ${childName}, children's book illustration style.`;
 

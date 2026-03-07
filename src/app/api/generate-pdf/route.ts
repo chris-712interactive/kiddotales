@@ -86,7 +86,9 @@ export async function POST(request: NextRequest) {
     }
 
     const pdfBytes = await pdfDoc.save();
-    return new NextResponse(pdfBytes, {
+    const copy = new Uint8Array(pdfBytes.length);
+    copy.set(pdfBytes);
+    return new NextResponse(new Blob([copy], { type: "application/pdf" }), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${book.title.replace(/\s+/g, "-")}.pdf"`,

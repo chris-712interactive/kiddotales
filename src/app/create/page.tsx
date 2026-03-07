@@ -154,7 +154,7 @@ export default function CreatePage() {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = Array.from(event.results)
-        .map((r) => r[0].transcript)
+        .map((r: SpeechRecognitionResult) => r[0].transcript)
         .join("");
       if (transcript) {
         setForm((prev) => ({ ...prev, childName: transcript.trim().split(" ")[0] || prev.childName }));

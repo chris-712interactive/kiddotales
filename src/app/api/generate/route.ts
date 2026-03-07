@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       throw new Error("No story content from OpenAI");
     }
 
-    let parsed: { title: string; pages: BookPage[] };
+    let parsed: { title: string; pages: BookPage[]; coverImagePrompt?: string };
     try {
       parsed = JSON.parse(content);
     } catch {
@@ -152,12 +152,45 @@ export async function POST(request: NextRequest) {
 
     const styleSuffix = ART_STYLE_PROMPTS[artStyle] || ART_STYLE_PROMPTS["whimsical-watercolor"];
 
-    // 2. Generate images with Replicate (throttled: free tier = 1 req/sec, 6 req/min)
-    console.log("[KiddoTales] OpenAI done, starting Replicate (8 images, throttled)...");
+    // 2. Generate cover image first, then page images (throttled: free tier = 6 req/min)
+    console.log("[KiddoTales] OpenAI done, starting Replicate (cover + 8 images, throttled)...");
+    let coverImageUrl = "";
+
+    const coverPrompt =
+      parsed.coverImagePrompt ||
+      `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
+    const fullCoverPrompt = `${coverPrompt}. ${styleSuffix}`;
+
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        const output = await replicate.run(
+          "black-forest-labs/flux-schnell" as `${string}/${string}`,
+          { input: { prompt: fullCoverPrompt, num_outputs: 1, output_format: "png" } }
+        );
+        const result = Array.isArray(output) ? output[0] : output;
+        if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
+          coverImageUrl = (result as { url: () => string }).url();
+        } else if (typeof result === "string") {
+          coverImageUrl = result;
+        }
+        break;
+      } catch (repErr) {
+        const repStatus = repErr && typeof repErr === "object" && "status" in repErr ? (repErr as { status: number }).status : undefined;
+        if (repStatus === 429 && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 35000));
+        } else {
+          console.warn("[KiddoTales] Cover image failed, continuing without:", repErr);
+          break;
+        }
+      }
+    }
+
+    await new Promise((r) => setTimeout(r, 10000)); // Throttle before page images
+
     const imageUrls: string[] = [];
     for (let i = 0; i < parsed.pages.length; i++) {
       if (i > 0) {
-        await new Promise((r) => setTimeout(r, 10000)); // after 6th, wait ~55s for 6/min reset
+        await new Promise((r) => setTimeout(r, 10000)); // 6 per minute throttle limit on replicate.
       }
       const page = parsed.pages[i];
       const promptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
@@ -200,6 +233,7 @@ export async function POST(request: NextRequest) {
         imageUrl: imageUrls[i] || undefined,
       })),
       createdAt: new Date().toISOString(),
+      coverImageUrl: coverImageUrl || undefined,
     };
 
     return NextResponse.json(book);

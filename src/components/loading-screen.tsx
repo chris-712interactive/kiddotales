@@ -67,7 +67,7 @@ export function LoadingScreen() {
           animate={{ scale: [1, 1.05, 1] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
-          <BookOpen className="size-20 text-primary" />
+          <BookOpen className="size-20 loading-book-icon" />
         </motion.div>
         <p className="text-center text-xl font-semibold text-foreground md:text-2xl">
           Weaving your magic story...

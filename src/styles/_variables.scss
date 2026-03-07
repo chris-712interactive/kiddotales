@@ -1,0 +1,11 @@
+// Custom SCSS variables (use alongside CSS custom properties from globals.css)
+// These are available in any file that @use or @forward this partial
+
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+
+$transition-fast: 150ms ease;
+$transition-normal: 250ms ease;
+$transition-slow: 400ms ease;

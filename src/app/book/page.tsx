@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen,
@@ -11,12 +12,15 @@ import {
   Volume2,
   Download,
   Plus,
+  RectangleVertical,
+  RectangleHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { saveBookToHistory, getBookHistory } from "@/lib/storage";
+import { saveBookToHistory, getBookHistory, getBookByCreatedAt } from "@/lib/storage";
 import { toast } from "sonner";
 import type { BookData } from "@/types";
+import { PENDING_BOOK_KEY } from "@/lib/constants";
 
 function BookViewerContent() {
   const searchParams = useSearchParams();
@@ -24,21 +28,45 @@ function BookViewerContent() {
   const [currentPage, setCurrentPage] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [speakingPage, setSpeakingPage] = useState<number | null>(null);
+  const [showOrientationDialog, setShowOrientationDialog] = useState(false);
 
   useEffect(() => {
+    const createdAt = searchParams.get("createdAt");
     const dataParam = searchParams.get("data");
-    if (dataParam) {
+
+    if (createdAt) {
+      getBookByCreatedAt(createdAt).then((b) => setBook(b ?? null));
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const pending = sessionStorage.getItem(PENDING_BOOK_KEY);
+      if (pending) {
+        try {
+          const parsed = JSON.parse(pending) as BookData;
+          sessionStorage.removeItem(PENDING_BOOK_KEY);
+          setBook(parsed);
+          saveBookToHistory(parsed);
+        } catch {
+          getBookHistory().then((history) => setBook(history[0] ?? null));
+        }
+        return;
+      }
+    }
+
+    if (dataParam && dataParam.length < 8000) {
       try {
         const parsed = JSON.parse(decodeURIComponent(dataParam)) as BookData;
         setBook(parsed);
         saveBookToHistory(parsed);
       } catch {
-        const history = getBookHistory();
-        setBook(history[0] ?? null);
+        getBookHistory().then((history) => setBook(history[0] ?? null));
       }
-    } else if (typeof window !== "undefined") {
-      const history = getBookHistory();
-      setBook(history[0] ?? null);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      getBookHistory().then((history) => setBook(history[0] ?? null));
     }
   }, [searchParams]);
 
@@ -69,30 +97,34 @@ function BookViewerContent() {
     [book, speakingPage]
   );
 
-  const handleDownloadPDF = useCallback(async () => {
-    if (!book) return;
-    setIsDownloading(true);
-    try {
-      const res = await fetch("/api/generate-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(book),
-      });
-      if (!res.ok) throw new Error("Failed to generate PDF");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${book.title.replace(/\s+/g, "-")}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDF downloaded!");
-    } catch (err) {
-      toast.error("Failed to generate PDF.");
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [book]);
+  const handleDownloadPDF = useCallback(
+    async (orientation: "portrait" | "landscape") => {
+      if (!book) return;
+      setShowOrientationDialog(false);
+      setIsDownloading(true);
+      try {
+        const res = await fetch("/api/generate-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book, orientation }),
+        });
+        if (!res.ok) throw new Error("Failed to generate PDF");
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${book.title.replace(/\s+/g, "-")}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("PDF downloaded!");
+      } catch (err) {
+        toast.error("Failed to generate PDF.");
+      } finally {
+        setIsDownloading(false);
+      }
+    },
+    [book]
+  );
 
   if (!book) {
     return (
@@ -116,14 +148,20 @@ function BookViewerContent() {
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
       <header className="flex items-center justify-between px-4 py-4 md:px-8">
         <Link href="/" className="flex items-center gap-2">
-          <BookOpen className="size-8 text-primary" />
+        <Image
+            src="/branding/logo.svg"
+            alt="KiddoTales"
+            width={32}
+            height={32}
+            className="size-8 object-contain"
+          />
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={handleDownloadPDF}
+            onClick={() => setShowOrientationDialog(true)}
             disabled={isDownloading}
           >
             <Download className="mr-1 size-4" />
@@ -181,11 +219,11 @@ function BookViewerContent() {
                 transition={{ duration: 0.3 }}
               >
                 <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10">
-                  {page.imageUrl ? (
+                  {(page.imageData || page.imageUrl) ? (
                     <img
-                      src={page.imageUrl}
+                      src={page.imageData || page.imageUrl}
                       alt={`Page ${currentPage + 1}`}
-                      className="h-[300px] w-full object-cover md:h-[400px] md:w-[500px]"
+                      className="w-full object-cover book-page-image"
                     />
                   ) : (
                     <div className="flex h-[300px] w-full items-center justify-center bg-muted md:h-[400px] md:w-[500px]">
@@ -226,6 +264,56 @@ function BookViewerContent() {
             </Button>
           </div>
         </motion.div>
+
+        {/* Orientation dialog */}
+        <AnimatePresence>
+          {showOrientationDialog && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setShowOrientationDialog(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+              >
+                <h3 className="mb-4 text-center text-lg font-semibold text-foreground">
+                  Choose PDF orientation
+                </h3>
+                <div className="flex gap-4">
+                  <Button
+                    variant="outline"
+                    className="flex flex-1 flex-col gap-2 py-6"
+                    onClick={() => handleDownloadPDF("portrait")}
+                  >
+                    <RectangleVertical className="size-10 text-primary" />
+                    <span>Portrait</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex flex-1 flex-col gap-2 py-6"
+                    onClick={() => handleDownloadPDF("landscape")}
+                  >
+                    <RectangleHorizontal className="size-10 text-primary" />
+                    <span>Landscape</span>
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  className="mt-4 w-full"
+                  onClick={() => setShowOrientationDialog(false)}
+                >
+                  Cancel
+                </Button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Page indicator */}
         <div className="mt-6 flex justify-center gap-2">

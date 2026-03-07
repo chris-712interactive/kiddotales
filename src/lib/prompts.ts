@@ -14,6 +14,7 @@ Output ONLY valid JSON in this exact shape:
 {
   "title": "string",
   "characterDescription": "Detailed physical description of the main character for image consistency. Example: a 6-year-old girl named Emma with curly red hair in pigtails, big green eyes, freckles, always wearing a yellow raincoat and red boots, carrying a small blue backpack.",
+  "coverImagePrompt": "A single detailed scene for the book's front cover that captures the essence of the entire story - the main character, key setting, and magical mood. Should feel inviting and encapsulate the story's theme. No text in image.",
   "pages": [
     {
       "pageNumber": 1,

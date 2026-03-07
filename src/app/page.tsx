@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { BookOpen, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -31,7 +32,7 @@ export default function LandingPage() {
   const [history, setHistory] = useState<BookData[]>([]);
 
   useEffect(() => {
-    setHistory(getBookHistory());
+    getBookHistory().then(setHistory);
   }, []);
 
   return (
@@ -39,7 +40,13 @@ export default function LandingPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-4 md:px-8">
         <Link href="/" className="flex items-center gap-2">
-          <BookOpen className="size-8 text-primary" />
+          <Image
+            src="/branding/logo.svg"
+            alt="KiddoTales"
+            width={32}
+            height={32}
+            className="size-8 object-contain"
+          />
           <span className="text-xl font-bold text-foreground">KiddoTales</span>
         </Link>
         <ThemeToggle />
@@ -60,8 +67,8 @@ export default function LandingPage() {
             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
           >
             <Sparkles className="size-12 text-yellow-500" />
-            <div className="rounded-2xl bg-primary/20 p-6 shadow-xl">
-              <BookOpen className="size-24 text-primary" />
+            <div className="rounded-2xl bg-primary/20 p-6 shadow-xl loading-book-container">
+              <BookOpen className="size-24 loading-book-icon" />
             </div>
             <Sparkles className="size-12 text-yellow-500" />
           </motion.div>
@@ -132,13 +139,22 @@ export default function LandingPage() {
             </h2>
             <div className="flex flex-wrap justify-center gap-3">
               {history.map((book) => (
-                <Link key={book.createdAt} href={`/book?data=${encodeURIComponent(JSON.stringify(book))}`}>
+                <Link key={book.createdAt} href={`/book?createdAt=${encodeURIComponent(book.createdAt)}`}>
                   <motion.div
-                    className="rounded-xl border-2 border-border bg-card px-4 py-3 shadow-md"
+                    className="flex flex-col overflow-hidden rounded-xl border-2 border-border bg-card shadow-md"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <span className="font-medium">{book.title}</span>
+                    {(book.coverImageData || book.coverImageUrl) ? (
+                      <div className="relative h-24 w-32 overflow-hidden bg-muted">
+                        <img
+                          src={book.coverImageData || book.coverImageUrl!}
+                          alt={book.title}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
+                    <span className="px-4 py-3 font-medium">{book.title}</span>
                   </motion.div>
                 </Link>
               ))}

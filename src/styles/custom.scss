@@ -1,0 +1,33 @@
+// Custom styles outside of Tailwind
+// This file is imported in layout.tsx after globals.css.
+//
+// Structure:
+//   _variables.scss  - SCSS variables (breakpoints, transitions)
+//   _mixins.scss     - Reusable mixins (e.g. respond-to)
+//   custom.scss      - Main entry (this file)
+//
+// To add styles: write them here or create a new partial (e.g. _components.scss)
+// and @use it above. Use CSS custom properties (var(--primary)) from globals.css
+// for theme-aware colors.
+
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// Add your custom styles below:
+.book-page-image {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  aspect-ratio: 3/4;
+  @include respond-to(md) {
+    aspect-ratio: 4/5;
+  }
+}
+
+.loading-book-icon {
+  color: #5f79ea;
+}
+
+.loading-book-container {
+  background: linear-gradient(45deg, #5f79ea, #18e8d9);
+}

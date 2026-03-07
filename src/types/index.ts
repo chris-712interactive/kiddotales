@@ -8,12 +8,18 @@ export interface BookPage {
   imagePrompt?: string;
   illustrationPromptBase?: string; // from prompts.ts schema
   imageUrl?: string;
+  /** Base64 data URL for persistent storage (survives Replicate URL expiry) */
+  imageData?: string;
 }
 
 export interface BookData {
   title: string;
   pages: BookPage[];
   createdAt: string;
+  /** Cover image URL - AI-generated to encompass the whole story */
+  coverImageUrl?: string;
+  /** Base64 data URL for persistent storage */
+  coverImageData?: string;
 }
 
 export interface CreateFormData {
@@ -58,9 +64,7 @@ export const INTERESTS = [
   "forest",
 ] as const;
 
-export const PRONOUNS = [
-  { value: "he/him", label: "he/him" },
-  { value: "she/her", label: "she/her" },
-  { value: "they/them", label: "they/them" },
-  { value: "custom", label: "Custom" },
+export const GENDERS = [
+  { value: "he/him", label: "Boy" },
+  { value: "she/her", label: "Girl" },
 ] as const;

@@ -1,62 +1,9 @@
 @import "tailwindcss";
 
-/* KiddoTales - Pastel kid-friendly theme */
-:root {
-  --background: hsl(40 33% 98%);
-  --foreground: hsl(240 10% 15%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(240 10% 15%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(240 10% 15%);
-  --primary: hsl(330 65% 65%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(200 60% 90%);
-  --secondary-foreground: hsl(200 50% 25%);
-  --muted: hsl(45 30% 95%);
-  --muted-foreground: hsl(240 5% 45%);
-  --accent: hsl(150 50% 85%);
-  --accent-foreground: hsl(150 40% 25%);
-  --destructive: hsl(0 70% 55%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(40 20% 90%);
-  --input: hsl(40 20% 90%);
-  --ring: hsl(330 65% 65%);
-  --radius: 1rem;
-  /* Pastel palette */
-  --pastel-pink: hsl(330 65% 92%);
-  --pastel-blue: hsl(200 60% 92%);
-  --pastel-yellow: hsl(45 80% 92%);
-  --pastel-mint: hsl(150 50% 92%);
-  --pastel-lavender: hsl(270 50% 92%);
-}
+/* KiddoTales - Logo-inspired blue-to-teal gradient theme */
+/* Logo palette: #5f79ea → #5882e8 → #489be4 → #2ec4de → #18e8d9 */
 
-.dark {
-  --background: hsl(240 15% 8%);
-  --foreground: hsl(40 20% 95%);
-  --card: hsl(240 12% 12%);
-  --card-foreground: hsl(40 20% 95%);
-  --popover: hsl(240 12% 12%);
-  --popover-foreground: hsl(40 20% 95%);
-  --primary: hsl(330 60% 60%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(200 40% 25%);
-  --secondary-foreground: hsl(200 30% 90%);
-  --muted: hsl(240 10% 18%);
-  --muted-foreground: hsl(40 10% 65%);
-  --accent: hsl(150 40% 25%);
-  --accent-foreground: hsl(150 30% 90%);
-  --destructive: hsl(0 60% 50%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(240 10% 20%);
-  --input: hsl(240 10% 20%);
-  --ring: hsl(330 60% 60%);
-  --pastel-pink: hsl(330 40% 20%);
-  --pastel-blue: hsl(200 40% 20%);
-  --pastel-yellow: hsl(45 50% 20%);
-  --pastel-mint: hsl(150 40% 20%);
-  --pastel-lavender: hsl(270 40% 20%);
-}
-
+/* Map Tailwind theme variables - @theme inline allows var(--primary) to resolve in context */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -78,6 +25,65 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Variables must be in @layer base for proper cascade with @theme inline */
+@layer base {
+  :root {
+    --background: hsl(210 30% 98%);
+    --foreground: hsl(220 15% 15%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(220 15% 15%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(220 15% 15%);
+    --primary: hsl(207 72% 59%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(207 60% 92%);
+    --secondary-foreground: hsl(207 50% 25%);
+    --muted: hsl(210 25% 95%);
+    --muted-foreground: hsl(220 10% 45%);
+    --accent: hsl(174 70% 85%);
+    --accent-foreground: hsl(174 50% 25%);
+    --destructive: hsl(0 70% 55%);
+    --destructive-foreground: hsl(0 0% 100%);
+    --border: hsl(210 25% 90%);
+    --input: hsl(210 25% 90%);
+    --ring: hsl(207 72% 59%);
+    --radius: 1rem;
+    /* Logo gradient palette (soft tints) */
+    --pastel-pink: hsl(227 55% 94%);
+    --pastel-blue: hsl(207 55% 94%);
+    --pastel-yellow: hsl(189 55% 94%);
+    --pastel-mint: hsl(174 55% 94%);
+    --pastel-lavender: hsl(227 45% 94%);
+  }
+
+  .dark {
+    --background: hsl(220 20% 8%);
+    --foreground: hsl(210 20% 95%);
+    --card: hsl(220 18% 12%);
+    --card-foreground: hsl(210 20% 95%);
+    --popover: hsl(220 18% 12%);
+    --popover-foreground: hsl(210 20% 95%);
+    --primary: hsl(207 72% 55%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(207 40% 22%);
+    --secondary-foreground: hsl(207 30% 90%);
+    --muted: hsl(220 15% 18%);
+    --muted-foreground: hsl(210 15% 65%);
+    --accent: hsl(174 50% 25%);
+    --accent-foreground: hsl(174 40% 90%);
+    --destructive: hsl(0 60% 50%);
+    --destructive-foreground: hsl(0 0% 100%);
+    --border: hsl(220 15% 20%);
+    --input: hsl(220 15% 20%);
+    --ring: hsl(207 72% 55%);
+    --pastel-pink: hsl(227 40% 18%);
+    --pastel-blue: hsl(207 40% 18%);
+    --pastel-yellow: hsl(189 40% 18%);
+    --pastel-mint: hsl(174 40% 18%);
+    --pastel-lavender: hsl(227 35% 18%);
+  }
 }
 
 * {

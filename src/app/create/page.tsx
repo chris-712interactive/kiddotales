@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -22,10 +23,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LoadingScreen } from "@/components/loading-screen";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PENDING_BOOK_KEY } from "@/lib/constants";
 import {
+  GENDERS,
   INTERESTS,
   LIFE_LESSONS,
-  PRONOUNS,
   type CreateFormData,
 } from "@/types";
 
@@ -35,6 +37,7 @@ const ART_STYLE_CARDS = [
     label: "Whimsical Watercolor",
     description: "Soft, dreamy pastels",
     gradient: "from-pink-200 to-blue-200 dark:from-pink-900/30 dark:to-blue-900/30",
+    image: "/artStyles/whimsicalWatercolors.png",
   },
   {
     id: "pixar-3d",
@@ -76,7 +79,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
   {
     childName: "River",
     age: 5,
-    pronouns: "they/them",
+    pronouns: "she/her",
     interests: ["ocean", "superheroes", "princesses"],
     lifeLesson: "kindness",
     artStyle: "vibrant-cartoon",
@@ -222,7 +225,10 @@ export default function CreatePage() {
       }
 
       const book = await res.json();
-      router.push(`/book?data=${encodeURIComponent(JSON.stringify(book))}`);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(PENDING_BOOK_KEY, JSON.stringify(book));
+      }
+      router.push("/book");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong.");
       setIsLoading(false);
@@ -239,7 +245,13 @@ export default function CreatePage() {
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
       <header className="flex items-center justify-between px-4 py-4 md:px-8">
         <Link href="/" className="flex items-center gap-2">
-          <BookOpen className="size-8 text-primary" />
+        <Image
+            src="/branding/logo.svg"
+            alt="KiddoTales"
+            width={32}
+            height={32}
+            className="size-8 object-contain"
+          />
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -319,29 +331,21 @@ export default function CreatePage() {
 
             {/* Pronouns */}
             <div className="space-y-2">
-              <Label>Pronouns</Label>
+              <Label>Gender</Label>
               <div className="flex flex-wrap items-center gap-2">
-                {PRONOUNS.map((p) => (
+                {GENDERS.map((gender) => (
                   <Button
-                    key={p.value}
+                    key={gender.value}
                     type="button"
-                    variant={form.pronouns === p.value ? "default" : "outline"}
+                    variant={form.pronouns === gender.value ? "default" : "outline"}
                     size="sm"
                     onClick={() =>
-                      setForm((prev) => ({ ...prev, pronouns: p.value }))
+                      setForm((prev) => ({ ...prev, pronouns: gender.value }))
                     }
                   >
-                    {p.label}
+                    {gender.label}
                   </Button>
                 ))}
-                {form.pronouns === "custom" && (
-                  <Input
-                    placeholder="e.g. ze/zir"
-                    value={customPronoun}
-                    onChange={(e) => setCustomPronoun(e.target.value)}
-                    className="w-28"
-                  />
-                )}
               </div>
             </div>
 
@@ -444,12 +448,22 @@ export default function CreatePage() {
                         setForm((prev) => ({ ...prev, artStyle: style.id }))
                       }
                     >
-                      <div
-                        className={cn(
-                          "h-20 rounded-t-xl bg-gradient-to-br",
-                          style.gradient
+                      <div className="h-20 rounded-t-xl overflow-hidden">
+                        {style.image ? (
+                          <img
+                            src={style.image}
+                            alt={style.label}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className={cn(
+                              "h-full w-full bg-gradient-to-br",
+                              style.gradient
+                            )}
+                          />
                         )}
-                      />
+                      </div>
                       <CardHeader className="py-3">
                         <CardTitle className="text-base">
                           {style.label}

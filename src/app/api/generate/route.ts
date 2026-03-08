@@ -10,10 +10,10 @@ import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { auth } from "@/auth";
 import {
   ensureUser,
-  getUserBookCount,
+  getUserBookCountByPeriod,
   incrementUserBookCount,
   saveBookToSupabase,
-  BOOK_LIMIT,
+  getBookLimitForUser,
 } from "@/lib/db";
 import { uploadImageToStorage } from "@/lib/supabase-storage";
 
@@ -117,10 +117,12 @@ export async function POST(request: NextRequest) {
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       await ensureUser(userId, userEmail);
-      const count = await getUserBookCount(userId);
-      if (count >= BOOK_LIMIT) {
+      const { limit, period } = await getBookLimitForUser(userId);
+      const count = await getUserBookCountByPeriod(userId, period);
+      if (count >= limit) {
+        const periodMsg = period === "monthly" ? "this month" : "total";
         return NextResponse.json(
-          { error: `You've reached your limit of ${BOOK_LIMIT} books. Upgrade or contact support.` },
+          { error: `You've reached your limit of ${limit} books ${periodMsg}. Upgrade your plan for more stories!` },
           { status: 403 }
         );
       }

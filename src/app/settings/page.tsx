@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Phone, BookOpen, Sparkles } from "lucide-react";
+import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AuthButtons } from "@/components/auth-buttons";
 import { toast } from "sonner";
 
 type SettingsData = {
@@ -31,16 +33,91 @@ type SettingsData = {
   };
   bookCount: number;
   bookLimit: number;
+  bookLimitPeriod?: "total" | "monthly";
   subscriptionTier: string;
   theme?: "light" | "dark";
 };
 
-export default function SettingsPage() {
+function SettingsContent() {
+  const searchParams = useSearchParams();
   const [data, setData] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
+
+  useEffect(() => {
+    const checkout = searchParams.get("checkout");
+    const sessionId = searchParams.get("session_id");
+    if (checkout === "success" && sessionId) {
+      toast.success("Subscription activated! Syncing your plan...");
+      fetch("/api/stripe/confirm-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      })
+        .then((r) => r.json())
+        .then((res) => {
+          if (res.success) {
+            const limits = { spark: 20, magic: 60, legend: 200 };
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    subscriptionTier: res.tier,
+                    bookLimit: limits[res.tier as keyof typeof limits] ?? prev.bookLimit,
+                    bookLimitPeriod: "monthly",
+                  }
+                : prev
+            );
+            window.history.replaceState({}, "", "/settings");
+          }
+        })
+        .catch(() => {});
+    } else if (checkout === "success") {
+      toast.success("Subscription activated! Thank you for upgrading.");
+    }
+  }, [searchParams]);
+
+  const handleSyncSubscription = async () => {
+    setSyncLoading(true);
+    try {
+      const res = await fetch("/api/stripe/sync", { method: "POST" });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        const settingsRes = await fetch("/api/user/settings");
+        if (settingsRes.ok) {
+          const fresh = await settingsRes.json();
+          setData(fresh);
+          setDisplayName(fresh.profile?.displayName ?? "");
+          setPhone(fresh.profile?.phone ?? "");
+        }
+        toast.success("Plan synced! Your monthly limit has been updated.");
+      } else {
+        toast.error(json.error || "No subscription found to sync");
+      }
+    } catch {
+      toast.error("Could not sync subscription");
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      if (json.url) window.location.href = json.url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open billing");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/user/settings")
@@ -164,6 +241,7 @@ export default function SettingsPage() {
               Home
             </Button>
           </Link>
+          <AuthButtons />
           <ThemeToggle />
         </div>
       </header>
@@ -278,7 +356,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between rounded-xl border-2 border-border bg-muted/50 px-4 py-3">
                 <span className="font-medium">Books created</span>
                 <span className="text-muted-foreground">
-                  {bookCount} / {bookLimit}
+                  {bookCount} / {bookLimit} {data.bookLimitPeriod === "monthly" ? "this month" : "total"}
                 </span>
               </div>
               {bookCount >= bookLimit && (
@@ -287,10 +365,76 @@ export default function SettingsPage() {
                   stories!
                 </p>
               )}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {subscriptionTier === "free" ? (
+                  <>
+                    <Link href="/pricing">
+                      <Button size="sm">
+                        <Sparkles className="mr-1 size-4" />
+                        Upgrade plan
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={syncLoading}
+                      onClick={handleSyncSubscription}
+                      title="If you just subscribed, click to sync your plan"
+                    >
+                      {syncLoading ? (
+                        <Loader2 className="mr-1 size-4 animate-spin" />
+                      ) : null}
+                      Just subscribed? Sync plan
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={portalLoading}
+                    onClick={handleManageSubscription}
+                  >
+                    {portalLoading ? (
+                      <Loader2 className="mr-1 size-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="mr-1 size-4" />
+                    )}
+                    Manage subscription
+                  </Button>
+                )}
+                {subscriptionTier !== "free" && (
+                  <Link href="/pricing">
+                    <Button size="sm" variant="ghost">
+                      Change plan
+                    </Button>
+                  </Link>
+                )}
+              </div>
             </CardContent>
           </Card>
         </motion.div>
       </main>
     </div>
+  );
+}
+
+function SettingsLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+      <main className="mx-auto flex max-w-2xl items-center justify-center px-4 py-24">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          Loading settings…
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsLoading />}>
+      <SettingsContent />
+    </Suspense>
   );
 }

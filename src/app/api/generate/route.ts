@@ -7,6 +7,15 @@ import {
 } from "@/lib/constants";
 import type { BookData, BookPage, CharacterAppearance } from "@/types";
 import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
+import { auth } from "@/auth";
+import {
+  ensureUser,
+  getUserBookCount,
+  incrementUserBookCount,
+  saveBookToSupabase,
+  BOOK_LIMIT,
+} from "@/lib/db";
+import { uploadImageToStorage } from "@/lib/supabase-storage";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -80,6 +89,14 @@ async function createCompletionWithRetry(
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Sign in required to create books." }, { status: 401 });
+    }
+
+    const userId = session.user.id as string;
+    const userEmail = session.user.email ?? null;
+
     const body = await request.json();
     const {
       childName,
@@ -96,6 +113,17 @@ export async function POST(request: NextRequest) {
         { error: "Child name and interests are required." },
         { status: 400 }
       );
+    }
+
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      await ensureUser(userId, userEmail);
+      const count = await getUserBookCount(userId);
+      if (count >= BOOK_LIMIT) {
+        return NextResponse.json(
+          { error: `You've reached your limit of ${BOOK_LIMIT} books. Upgrade or contact support.` },
+          { status: 403 }
+        );
+      }
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -281,15 +309,63 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const book: BookData = {
+    const createdAt = new Date().toISOString();
+    let book: BookData = {
       title: parsed.title,
       pages: parsed.pages.map((p: BookPage, i: number) => ({
         ...p,
         imageUrl: imageUrls[i] || undefined,
       })),
-      createdAt: new Date().toISOString(),
+      createdAt,
       coverImageUrl: coverImageUrl || undefined,
     };
+
+    const hasSupabase =
+      process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (hasSupabase) {
+      try {
+        const bookId = crypto.randomUUID();
+        const storagePath = (name: string) => `books/${bookId}/${name}`;
+
+        let coverStorageUrl = book.coverImageUrl ?? null;
+        if (book.coverImageUrl) {
+          coverStorageUrl = await uploadImageToStorage(
+            book.coverImageUrl,
+            storagePath("cover.png")
+          );
+        }
+
+        const pagesWithStorage = await Promise.all(
+          book.pages.map(async (p, i) => {
+            const url = p.imageUrl;
+            if (!url) return { ...p };
+            const storageUrl = await uploadImageToStorage(
+              url,
+              storagePath(`page-${i}.png`)
+            );
+            return { ...p, imageUrl: storageUrl ?? url };
+          })
+        );
+
+        book = {
+          ...book,
+          id: bookId,
+          coverImageUrl: coverStorageUrl ?? book.coverImageUrl,
+          pages: pagesWithStorage,
+        };
+
+        const savedBook = {
+          ...book,
+          coverImageData: undefined,
+          pages: book.pages.map(({ imageData: _, ...p }) => p),
+        };
+        await saveBookToSupabase(userId, savedBook, bookId);
+        await incrementUserBookCount(userId);
+      } catch (dbErr) {
+        console.error("[KiddoTales] Supabase save error:", dbErr);
+      }
+    }
 
     return NextResponse.json(book);
   } catch (err) {

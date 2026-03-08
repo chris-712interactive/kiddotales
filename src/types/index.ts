@@ -13,6 +13,7 @@ export interface BookPage {
 }
 
 export interface BookData {
+  id?: string;
   title: string;
   pages: BookPage[];
   createdAt: string;

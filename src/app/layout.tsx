@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 import "@/styles/custom.scss";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthSessionProvider } from "@/components/session-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,8 +42,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider defaultTheme="light" storageKey="kiddotales-theme">
-          {children}
+        <AuthSessionProvider>
+          <ThemeProvider defaultTheme="light" storageKey="kiddotales-theme">
+            {children}
           <Toaster
             position="top-center"
             richColors
@@ -54,7 +56,8 @@ export default function RootLayout({
               },
             }}
           />
-        </ThemeProvider>
+          </ThemeProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

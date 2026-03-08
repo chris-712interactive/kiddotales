@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AuthButtons } from "@/components/auth-buttons";
 import { saveBookToHistory, getBookHistory, getBookByCreatedAt } from "@/lib/storage";
 import { toast } from "sonner";
 import type { BookData } from "@/types";
@@ -31,8 +32,34 @@ function BookViewerContent() {
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
 
   useEffect(() => {
+    const bookId = searchParams.get("id");
     const createdAt = searchParams.get("createdAt");
     const dataParam = searchParams.get("data");
+
+    if (bookId) {
+      // Use sessionStorage first for just-created books (instant display)
+      const pending = typeof window !== "undefined" ? sessionStorage.getItem(PENDING_BOOK_KEY) : null;
+      if (pending) {
+        try {
+          const parsed = JSON.parse(pending) as BookData;
+          if (parsed.id === bookId) {
+            setBook(parsed);
+            saveBookToHistory(parsed).finally(() => {
+              sessionStorage.removeItem(PENDING_BOOK_KEY);
+            });
+            return;
+          }
+        } catch {
+          sessionStorage.removeItem(PENDING_BOOK_KEY);
+        }
+      }
+      // Fallback: fetch from API (for cross-device or direct links)
+      fetch(`/api/books/${bookId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b) => setBook(b ?? null))
+        .catch(() => setBook(null));
+      return;
+    }
 
     if (createdAt) {
       getBookByCreatedAt(createdAt).then((b) => setBook(b ?? null));
@@ -175,6 +202,7 @@ function BookViewerContent() {
               Make another book
             </Button>
           </Link>
+          <AuthButtons />
           <ThemeToggle />
         </div>
       </header>

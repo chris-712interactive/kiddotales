@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
 
 export function AuthButtons() {
   const { data: session, status } = useSession();
@@ -16,6 +18,11 @@ export function AuthButtons() {
         <span className="hidden text-sm text-muted-foreground sm:inline">
           {session.user.email}
         </span>
+        <Link href="/settings">
+          <Button variant="ghost" size="sm" title="Settings">
+            <Settings className="size-4" />
+          </Button>
+        </Link>
         <Button variant="ghost" size="sm" onClick={() => signOut()}>
           Sign out
         </Button>

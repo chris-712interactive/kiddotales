@@ -49,7 +49,7 @@ const ART_STYLE_CARDS = [
     label: "Pixar-style 3D",
     description: "Vibrant & expressive",
     gradient: "from-amber-200 to-orange-200 dark:from-amber-900/30 dark:to-orange-900/30",
-    image: "/artStyles/pixar3D.png",
+    image: "/artStyles/pixar3d.png",
   },
   {
     id: "hand-drawn-classic",

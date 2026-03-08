@@ -1,0 +1,232 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import {
+  Check,
+  Sparkles,
+  Zap,
+  Crown,
+  ArrowLeft,
+  Loader2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { AuthButtons } from "@/components/auth-buttons";
+import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+const TIER_ICONS: Record<string, React.ReactNode> = {
+  free: <Sparkles className="size-5" />,
+  spark: <Zap className="size-5" />,
+  magic: <Sparkles className="size-5" />,
+  legend: <Crown className="size-5" />,
+};
+
+export default function PricingPage() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
+
+  const handleSubscribe = async (priceId: string) => {
+    if (status !== "authenticated") {
+      router.push(`/sign-in?callbackUrl=/pricing`);
+      return;
+    }
+    setLoadingPriceId(priceId);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Checkout failed");
+      if (data.url) window.location.href = data.url;
+      else throw new Error("No checkout URL");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Checkout failed");
+    } finally {
+      setLoadingPriceId(null);
+    }
+  };
+
+  const paidTiers = (["spark", "magic", "legend"] as const).map((id) => ({
+    id,
+    ...SUBSCRIPTION_TIERS[id],
+  }));
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+      <header className="flex items-center justify-between px-4 py-4 md:px-8">
+        <Link href="/" className="flex items-center gap-2">
+          <Image
+            src="/branding/logo.svg"
+            alt="KiddoTales"
+            width={32}
+            height={32}
+            className="size-8 object-contain"
+          />
+          <span className="text-xl font-bold text-foreground">KiddoTales</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="mr-1 size-4" />
+              Back
+            </Button>
+          </Link>
+          <AuthButtons />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8 md:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="text-center"
+        >
+          <h1 className="text-3xl font-bold text-foreground md:text-4xl">
+            Choose your plan
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            Unlock more stories and features for your little ones
+          </p>
+        </motion.div>
+
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
+          {/* Free tier */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+          >
+            <div className="flex h-full flex-col rounded-2xl border-2 border-border bg-card p-6 shadow-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                {TIER_ICONS.free}
+                <span className="font-semibold">{SUBSCRIPTION_TIERS.free.name}</span>
+              </div>
+              <div className="mt-4">
+                <span className="text-3xl font-bold">Free</span>
+              </div>
+              <ul className="mt-4 flex-1 space-y-2 text-sm text-muted-foreground">
+                {SUBSCRIPTION_TIERS.free.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/create" className="mt-6">
+                <Button variant="outline" className="w-full">
+                  Get started
+                </Button>
+              </Link>
+            </div>
+          </motion.div>
+
+          {/* Paid tiers */}
+          {paidTiers.map((tier, idx) => {
+            const priceIdMonthly = (tier as { priceIdMonthly?: string }).priceIdMonthly;
+            const priceIdYearly = (tier as { priceIdYearly?: string }).priceIdYearly;
+            const hasPrices = !!(priceIdMonthly || priceIdYearly);
+
+            return (
+              <motion.div
+                key={tier.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 + (idx + 1) * 0.05 }}
+              >
+                <div
+                  className={`flex h-full flex-col rounded-2xl border-2 p-6 shadow-sm ${
+                    tier.id === "legend"
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {TIER_ICONS[tier.id]}
+                    <span className="font-semibold">{tier.name}</span>
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-3xl font-bold">
+                      ${tier.priceMonthly}
+                    </span>
+                    <span className="text-muted-foreground">/mo</span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    or ${tier.priceYearly}/year (save 17%)
+                  </p>
+                  <ul className="mt-4 flex-1 space-y-2 text-sm text-muted-foreground">
+                    {tier.features.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  {status === "authenticated" && hasPrices ? (
+                    <div className="mt-6 space-y-2">
+                      <Button
+                        className="w-full"
+                        disabled={!!loadingPriceId}
+                        onClick={() =>
+                          handleSubscribe(priceIdMonthly || priceIdYearly!)
+                        }
+                      >
+                        {loadingPriceId === (priceIdMonthly || priceIdYearly) ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          "Subscribe monthly"
+                        )}
+                      </Button>
+                      {priceIdYearly && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          disabled={!!loadingPriceId}
+                          onClick={() => handleSubscribe(priceIdYearly)}
+                        >
+                          {loadingPriceId === priceIdYearly ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            "Subscribe yearly"
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  ) : status === "authenticated" ? (
+                    <Button
+                      className="mt-6 w-full"
+                      variant="outline"
+                      onClick={() =>
+                        toast.error("Stripe prices not configured. Add price IDs to .env")
+                      }
+                    >
+                      Subscribe (configure Stripe)
+                    </Button>
+                  ) : (
+                    <Link href="/sign-in?callbackUrl=/pricing" className="mt-6 block">
+                      <Button className="w-full">Sign in to subscribe</Button>
+                    </Link>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          Secure checkout powered by Stripe. Cancel anytime.
+        </p>
+      </main>
+    </div>
+  );
+}

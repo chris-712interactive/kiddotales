@@ -100,7 +100,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
 export default function CreatePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [bookCount, setBookCount] = useState<{ count: number; limit: number } | null>(null);
+  const [bookCount, setBookCount] = useState<{ count: number; limit: number; period?: "total" | "monthly" } | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
@@ -243,6 +243,7 @@ export default function CreatePage() {
         const err = await res.json().catch(() => ({}));
         if (res.status === 403) {
           toast.error(err.error || "You've reached your book limit.");
+          router.push("/pricing");
           return;
         }
         if (res.status === 401) {
@@ -258,7 +259,7 @@ export default function CreatePage() {
         sessionStorage.setItem(PENDING_BOOK_KEY, JSON.stringify(book));
       }
       setBookCount((prev) =>
-        prev ? { ...prev, count: prev.count + 1 } : null
+        prev ? { ...prev, count: prev.count + 1 } : { count: 1, limit: 3, period: "total" }
       );
       router.push(book.id ? `/book?id=${book.id}` : "/book");
     } catch (err) {
@@ -309,7 +310,7 @@ export default function CreatePage() {
           </h1>
           {bookCount != null && (
             <p className="mb-2 text-center text-sm text-muted-foreground">
-              {bookCount.count} of {bookCount.limit} books created
+              {bookCount.count} of {bookCount.limit} books {bookCount.period === "monthly" ? "this month" : "total"}
             </p>
           )}
           <p className="mb-6 text-center text-muted-foreground">

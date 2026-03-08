@@ -4,8 +4,8 @@ import {
   ensureUser,
   getUserProfile,
   updateUserProfile,
-  getUserBookCount,
-  BOOK_LIMIT,
+  getUserBookCountByPeriod,
+  getBookLimitForUser,
 } from "@/lib/db";
 
 export async function GET() {
@@ -17,9 +17,9 @@ export async function GET() {
   const userId = session.user.id as string;
   try {
     await ensureUser(userId, session.user.email ?? undefined);
-    const [profile, bookCount] = await Promise.all([
+    const [profile, limitConfig] = await Promise.all([
       getUserProfile(userId),
-      getUserBookCount(userId),
+      getBookLimitForUser(userId),
     ]);
 
     if (!profile) {
@@ -29,6 +29,8 @@ export async function GET() {
       );
     }
 
+    const bookCount = await getUserBookCountByPeriod(userId, limitConfig.period);
+
     return NextResponse.json({
       profile: {
         ...profile,
@@ -36,7 +38,8 @@ export async function GET() {
         image: session.user.image ?? null,
       },
       bookCount,
-      bookLimit: BOOK_LIMIT,
+      bookLimit: limitConfig.limit,
+      bookLimitPeriod: limitConfig.period,
       subscriptionTier: profile.subscriptionTier,
       theme: profile.theme,
     });

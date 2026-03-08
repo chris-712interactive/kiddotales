@@ -113,7 +113,8 @@ export default function LandingPage() {
           </p>
 
           <motion.div
-            whileHover={{ scale: 1.05 }}
+            className="flex flex-col items-center gap-3"
+            whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
             <Link href="/create">
@@ -121,6 +122,12 @@ export default function LandingPage() {
                 <BookOpen className="mr-2 size-5" />
                 Create Your Book
               </Button>
+            </Link>
+            <Link
+              href="/pricing"
+              className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+            >
+              View plans & pricing
             </Link>
           </motion.div>
         </motion.section>

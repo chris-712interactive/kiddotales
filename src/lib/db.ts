@@ -1,7 +1,9 @@
 import { createSupabaseAdmin } from "./supabase";
+import { getBookLimitForTier, type BookLimitPeriod } from "./stripe";
 import type { BookData } from "@/types";
 
-const BOOK_LIMIT = parseInt(process.env.BOOK_LIMIT_PER_USER || "5", 10);
+/** @deprecated Use getBookLimitForUser with tier instead */
+const BOOK_LIMIT = parseInt(process.env.BOOK_LIMIT_PER_USER || "3", 10);
 
 export type UserProfile = {
   id: string;
@@ -10,6 +12,10 @@ export type UserProfile = {
   phone: string | null;
   subscriptionTier: string;
   theme: "light" | "dark";
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripeSubscriptionStatus?: string | null;
+  stripePriceId?: string | null;
   createdAt: string;
   updatedAt: string | null;
 };
@@ -28,7 +34,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, display_name, phone, subscription_tier, theme, created_at, updated_at")
+    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, created_at, updated_at")
     .eq("id", userId)
     .single();
 
@@ -42,9 +48,77 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     phone: data.phone ?? null,
     subscriptionTier: data.subscription_tier ?? "free",
     theme,
+    stripeCustomerId: data.stripe_customer_id ?? null,
+    stripeSubscriptionId: data.stripe_subscription_id ?? null,
+    stripeSubscriptionStatus: data.stripe_subscription_status ?? null,
+    stripePriceId: data.stripe_price_id ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at ?? null,
   };
+}
+
+/** Get book creation limit and period for user based on subscription tier. */
+export async function getBookLimitForUser(userId: string): Promise<{
+  limit: number;
+  period: BookLimitPeriod;
+}> {
+  const profile = await getUserProfile(userId);
+  const tier = profile?.subscriptionTier ?? "free";
+  return getBookLimitForTier(tier);
+}
+
+/** Get book count for user by period: total (all time) or monthly (current UTC month). */
+export async function getUserBookCountByPeriod(
+  userId: string,
+  period: BookLimitPeriod
+): Promise<number> {
+  const supabase = createSupabaseAdmin();
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  let query = supabase
+    .from("books")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (period === "monthly") {
+    query = query
+      .gte("created_at", startOfMonth.toISOString())
+      .lt("created_at", startOfNextMonth.toISOString());
+  }
+
+  const { count, error } = await query;
+  if (error) return 0;
+  return count ?? 0;
+}
+
+/** Max number of saved books to show in history (Spark: 10, Magic/Legend: unlimited). */
+export function getBookHistoryLimit(tier: string): number {
+  if (tier === "magic" || tier === "legend") return 500; // effectively unlimited
+  if (tier === "spark") return 10;
+  return 3; // free
+}
+
+/** Update user subscription from Stripe webhook data. */
+export async function updateSubscriptionFromStripe(
+  userId: string,
+  data: {
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string | null;
+    stripeSubscriptionStatus?: string | null;
+    stripePriceId?: string | null;
+    subscriptionTier?: string;
+  }
+): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (data.stripeCustomerId !== undefined) payload.stripe_customer_id = data.stripeCustomerId;
+  if (data.stripeSubscriptionId !== undefined) payload.stripe_subscription_id = data.stripeSubscriptionId;
+  if (data.stripeSubscriptionStatus !== undefined) payload.stripe_subscription_status = data.stripeSubscriptionStatus;
+  if (data.stripePriceId !== undefined) payload.stripe_price_id = data.stripePriceId;
+  if (data.subscriptionTier !== undefined) payload.subscription_tier = data.subscriptionTier;
+  await supabase.from("users").update(payload).eq("id", userId);
 }
 
 /** Update user profile (contact info, theme, etc.). */
@@ -84,17 +158,9 @@ export async function updateUserProfile(
   };
 }
 
-/** Get current book count for user. */
+/** Get current book count for user (total, for backward compatibility). */
 export async function getUserBookCount(userId: string): Promise<number> {
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("user_book_counts")
-    .select("book_count")
-    .eq("user_id", userId)
-    .single();
-
-  if (error || !data) return 0;
-  return data.book_count ?? 0;
+  return getUserBookCountByPeriod(userId, "total");
 }
 
 /** Increment book count for user. */
@@ -161,15 +227,16 @@ export async function getBookById(
   };
 }
 
-/** Get books for user (for "My Books" / history). */
-export async function getBooksByUserId(userId: string): Promise<BookData[]> {
+/** Get books for user (for "My Books" / history). Uses tier for limit. */
+export async function getBooksByUserId(userId: string, tier?: string): Promise<BookData[]> {
   const supabase = createSupabaseAdmin();
+  const limit = tier ? getBookHistoryLimit(tier) : 10;
   const { data, error } = await supabase
     .from("books")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(limit);
 
   if (error) return [];
 

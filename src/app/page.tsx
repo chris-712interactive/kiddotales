@@ -6,8 +6,10 @@ import Image from "next/image";
 import { BookOpen, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AuthButtons } from "@/components/auth-buttons";
 import { getBookHistory } from "@/lib/storage";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import type { BookData } from "@/types";
 
 const TESTIMONIALS = [
@@ -30,10 +32,34 @@ const TESTIMONIALS = [
 
 export default function LandingPage() {
   const [history, setHistory] = useState<BookData[]>([]);
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    getBookHistory().then(setHistory);
-  }, []);
+    if (status === "authenticated") {
+      Promise.all([
+        fetch("/api/books").then((r) => (r.ok ? r.json() : [])),
+        getBookHistory(),
+      ])
+        .then(([apiBooks, localBooks]) => {
+          const api = Array.isArray(apiBooks) ? apiBooks : [];
+          const local = Array.isArray(localBooks) ? localBooks : [];
+          const seen = new Set<string>();
+          const merged: BookData[] = [];
+          for (const b of [...api, ...local]) {
+            const key = b.id ?? b.createdAt;
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push(b);
+            }
+          }
+          merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setHistory(merged.slice(0, 10));
+        })
+        .catch(() => getBookHistory().then(setHistory));
+    } else {
+      getBookHistory().then(setHistory);
+    }
+  }, [status]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
@@ -49,7 +75,10 @@ export default function LandingPage() {
           />
           <span className="text-xl font-bold text-foreground">KiddoTales</span>
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <AuthButtons />
+          <ThemeToggle />
+        </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 md:px-8">
@@ -140,8 +169,8 @@ export default function LandingPage() {
             <div className="flex flex-wrap justify-start gap-5">
               {history.map((book) => (
                 <Link 
-                  key={book.createdAt} 
-                  href={`/book?createdAt=${encodeURIComponent(book.createdAt)}`}
+                  key={book.id ?? book.createdAt} 
+                  href={book.id ? `/book?id=${book.id}` : `/book?createdAt=${encodeURIComponent(book.createdAt)}`}
                   className="w-full"
                 >
                   <motion.div

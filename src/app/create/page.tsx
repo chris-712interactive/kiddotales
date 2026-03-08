@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AuthButtons } from "@/components/auth-buttons";
 import { LoadingScreen } from "@/components/loading-screen";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -99,6 +100,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
 export default function CreatePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [bookCount, setBookCount] = useState<{ count: number; limit: number } | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
@@ -194,6 +196,13 @@ export default function CreatePage() {
 
   const isSubmittingRef = useRef(false);
 
+  useEffect(() => {
+    fetch("/api/books/count")
+      .then((r) => r.json())
+      .then(setBookCount)
+      .catch(() => setBookCount(null));
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingRef.current || isLoading) return;
@@ -232,6 +241,15 @@ export default function CreatePage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 403) {
+          toast.error(err.error || "You've reached your book limit.");
+          return;
+        }
+        if (res.status === 401) {
+          toast.error("Please sign in to create books.");
+          router.push("/sign-in?callbackUrl=/create");
+          return;
+        }
         throw new Error(err.error || "Failed to generate book");
       }
 
@@ -239,7 +257,10 @@ export default function CreatePage() {
       if (typeof window !== "undefined") {
         sessionStorage.setItem(PENDING_BOOK_KEY, JSON.stringify(book));
       }
-      router.push("/book");
+      setBookCount((prev) =>
+        prev ? { ...prev, count: prev.count + 1 } : null
+      );
+      router.push(book.id ? `/book?id=${book.id}` : "/book");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong.");
       setIsLoading(false);
@@ -272,6 +293,7 @@ export default function CreatePage() {
               Back
             </Button>
           </Link>
+          <AuthButtons />
           <ThemeToggle />
         </div>
       </header>
@@ -285,6 +307,11 @@ export default function CreatePage() {
           <h1 className="mb-2 text-center text-3xl font-bold text-foreground">
             Create your storybook
           </h1>
+          {bookCount != null && (
+            <p className="mb-2 text-center text-sm text-muted-foreground">
+              {bookCount.count} of {bookCount.limit} books created
+            </p>
+          )}
           <p className="mb-6 text-center text-muted-foreground">
             Fill in the details below. We&apos;ll create a magical story just for your child.
           </p>

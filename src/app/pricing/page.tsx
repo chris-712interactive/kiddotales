@@ -55,9 +55,8 @@ export default function PricingPage() {
     }
   };
 
-  const paidTiers = (["spark", "magic", "legend"] as const).map((id) => ({
-    id,
-    ...SUBSCRIPTION_TIERS[id],
+  const paidTiers = (["spark", "magic", "legend"] as const).map((tierId) => ({
+    ...SUBSCRIPTION_TIERS[tierId],
   }));
 
   return (

@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 import "@/styles/custom.scss";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeSync } from "@/components/theme-sync";
 import { AuthSessionProvider } from "@/components/session-provider";
 
 const geistSans = Geist({
@@ -44,6 +45,7 @@ export default function RootLayout({
       >
         <AuthSessionProvider>
           <ThemeProvider defaultTheme="light" storageKey="kiddotales-theme">
+            <ThemeSync />
             {children}
           <Toaster
             position="top-center"

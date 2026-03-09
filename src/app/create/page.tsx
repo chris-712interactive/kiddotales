@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   BookOpen,
   Mic,
@@ -35,6 +36,7 @@ import {
   EYE_COLORS,
   type CreateFormData,
 } from "@/types";
+import { ParentalConsentModal } from "@/components/parental-consent-modal";
 
 const ART_STYLE_CARDS = [
   {
@@ -99,6 +101,9 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
 
 export default function CreatePage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [needsConsent, setNeedsConsent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bookCount, setBookCount] = useState<{ count: number; limit: number; period?: "total" | "monthly" } | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -203,6 +208,35 @@ export default function CreatePage() {
       .catch(() => setBookCount(null));
   }, []);
 
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.id) {
+      setConsentChecked(true);
+      setNeedsConsent(false);
+      return;
+    }
+    fetch("/api/user/consent")
+      .then((r) => r.json())
+      .then((data) => {
+        setConsentChecked(true);
+        setNeedsConsent(!data.hasConsent);
+      })
+      .catch(() => {
+        setConsentChecked(true);
+        setNeedsConsent(false);
+      });
+  }, [status, session?.user?.id]);
+
+  const handleConsent = async () => {
+    const res = await fetch("/api/user/consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "grant" }),
+    });
+    if (!res.ok) throw new Error("Failed to record consent");
+    setNeedsConsent(false);
+    toast.success("Thank you! You can now create your storybook.");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingRef.current || isLoading) return;
@@ -273,6 +307,17 @@ export default function CreatePage() {
   const resolvedLifeLesson = form.lifeLesson === "custom" ? customLifeLesson : form.lifeLesson;
 
   if (isLoading) return <LoadingScreen />;
+
+  if (consentChecked && needsConsent) {
+    return (
+      <>
+        <ParentalConsentModal
+          onConsent={handleConsent}
+          onDismiss={() => router.push("/")}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">

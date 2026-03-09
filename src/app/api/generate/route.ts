@@ -10,6 +10,7 @@ import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { auth } from "@/auth";
 import {
   ensureUser,
+  getUserProfile,
   getUserBookCountByPeriod,
   incrementUserBookCount,
   saveBookToSupabase,
@@ -117,6 +118,13 @@ export async function POST(request: NextRequest) {
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       await ensureUser(userId, userEmail);
+      const profile = await getUserProfile(userId);
+      if (!profile?.parentConsentAt) {
+        return NextResponse.json(
+          { error: "Parental consent required. Please complete the consent flow before creating books." },
+          { status: 403 }
+        );
+      }
       const { limit, period } = await getBookLimitForUser(userId);
       const count = await getUserBookCountByPeriod(userId, period);
       if (count >= limit) {

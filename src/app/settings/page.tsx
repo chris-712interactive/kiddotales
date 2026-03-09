@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ type SettingsData = {
     theme?: "light" | "dark";
     name: string | null;
     image: string | null;
+    parentConsentAt?: string | null;
   };
   bookCount: number;
   bookLimit: number;
@@ -47,6 +48,7 @@ function SettingsContent() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
+  const [revokeLoading, setRevokeLoading] = useState(false);
 
   useEffect(() => {
     const checkout = searchParams.get("checkout");
@@ -133,6 +135,31 @@ function SettingsContent() {
       .catch(() => toast.error("Could not load settings"))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleRevokeConsent = async () => {
+    if (!confirm("This will revoke your consent. You will need to consent again before creating new books. Continue?")) return;
+    setRevokeLoading(true);
+    try {
+      const res = await fetch("/api/user/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "revoke" }),
+      });
+      const json = await res.json();
+      if (res.ok && json.revoked) {
+        toast.success("Consent revoked. You can re-consent when creating your next book.");
+        setData((prev) => prev && prev.profile
+          ? { ...prev, profile: { ...prev.profile, parentConsentAt: null } }
+          : prev);
+      } else {
+        toast.error(json.error || "Could not revoke");
+      }
+    } catch {
+      toast.error("Could not revoke consent");
+    } finally {
+      setRevokeLoading(false);
+    }
+  };
 
   const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,6 +437,54 @@ function SettingsContent() {
                   </Link>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* COPPA: Manage child data */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="size-5" />
+                Manage child data
+              </CardTitle>
+              <CardDescription>
+                Your rights under COPPA: access, delete, or revoke consent
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {profile.parentConsentAt ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Consent given on {new Date(profile.parentConsentAt).toLocaleDateString()}.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/settings/books">
+                      <Button size="sm" variant="default">
+                        <BookOpen className="mr-1 size-4" />
+                        Manage books
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={revokeLoading}
+                      onClick={handleRevokeConsent}
+                    >
+                      {revokeLoading ? (
+                        <Loader2 className="mr-1 size-4 animate-spin" />
+                      ) : null}
+                      Revoke consent
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  You haven&apos;t given parental consent yet. You&apos;ll be prompted when you create your first book.
+                </p>
+              )}
+              <Link href="/privacy" className="inline-block text-sm text-primary underline hover:no-underline">
+                Privacy Policy
+              </Link>
             </CardContent>
           </Card>
         </motion.div>

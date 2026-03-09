@@ -46,8 +46,9 @@ export async function GET() {
           );
           subscriptionStatus = sub.status;
           cancelAtPeriodEnd = sub.cancel_at_period_end;
-          if (sub.current_period_end) {
-            nextBillingDate = new Date(sub.current_period_end * 1000).toISOString();
+          const periodEnd = sub.items?.data?.[0]?.current_period_end;
+          if (typeof periodEnd === "number") {
+            nextBillingDate = new Date(periodEnd * 1000).toISOString();
           }
         } catch {
           // Ignore Stripe errors; we'll show what we have

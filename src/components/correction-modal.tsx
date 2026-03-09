@@ -19,6 +19,7 @@ import {
   HAIR_STYLES,
   SKIN_TONES,
   EYE_COLORS,
+  type BookPage,
   type CreateFormData,
   type CreationMetadata,
   type ChildProfile,
@@ -47,7 +48,7 @@ const ART_STYLE_OPTIONS = [
 type BookWithMeta = {
   id: string;
   title: string;
-  pages: { text: string; [key: string]: unknown }[];
+  pages: BookPage[];
   creationMetadata?: CreationMetadata;
 };
 

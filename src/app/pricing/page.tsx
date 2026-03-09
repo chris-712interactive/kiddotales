@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -31,6 +31,18 @@ export default function PricingPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
+  const [currentTier, setCurrentTier] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/user/settings")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((res) => res && setCurrentTier(res.subscriptionTier ?? "free"))
+        .catch(() => {});
+    } else {
+      setCurrentTier(null);
+    }
+  }, [status]);
 
   const handleSubscribe = async (priceId: string) => {
     if (status !== "authenticated") {
@@ -106,7 +118,12 @@ export default function PricingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
           >
-            <div className="flex h-full flex-col rounded-2xl border-2 border-border bg-card p-6 shadow-sm">
+            <div className="relative flex h-full flex-col rounded-2xl border-2 border-border bg-card p-6 shadow-sm">
+              {currentTier === "free" && (
+                <span className="absolute right-4 top-4 rounded-full bg-primary/20 px-3 py-1 text-xs font-medium text-primary">
+                  Current plan
+                </span>
+              )}
               <div className="flex items-center gap-2 text-muted-foreground">
                 {TIER_ICONS.free}
                 <span className="font-semibold">{SUBSCRIPTION_TIERS.free.name}</span>
@@ -144,12 +161,17 @@ export default function PricingPage() {
                 transition={{ duration: 0.4, delay: 0.1 + (idx + 1) * 0.05 }}
               >
                 <div
-                  className={`flex h-full flex-col rounded-2xl border-2 p-6 shadow-sm ${
+                  className={`relative flex h-full flex-col rounded-2xl border-2 p-6 shadow-sm ${
                     tier.id === "legend"
                       ? "border-primary bg-primary/5"
                       : "border-border bg-card"
                   }`}
                 >
+                  {currentTier === tier.id && (
+                    <span className="absolute right-4 top-4 rounded-full bg-primary/20 px-3 py-1 text-xs font-medium text-primary">
+                      Current plan
+                    </span>
+                  )}
                   <div className="flex items-center gap-2">
                     {TIER_ICONS[tier.id]}
                     <span className="font-semibold">{tier.name}</span>
@@ -175,7 +197,7 @@ export default function PricingPage() {
                     <div className="mt-6 space-y-2">
                       <Button
                         className="w-full"
-                        disabled={!!loadingPriceId}
+                        disabled={!!loadingPriceId || currentTier === tier.id}
                         onClick={() =>
                           handleSubscribe(priceIdMonthly || priceIdYearly!)
                         }
@@ -190,7 +212,7 @@ export default function PricingPage() {
                         <Button
                           variant="outline"
                           className="w-full"
-                          disabled={!!loadingPriceId}
+                          disabled={!!loadingPriceId || currentTier === tier.id}
                           onClick={() => handleSubscribe(priceIdYearly)}
                         >
                           {loadingPriceId === priceIdYearly ? (
@@ -205,6 +227,7 @@ export default function PricingPage() {
                     <Button
                       className="mt-6 w-full"
                       variant="outline"
+                      disabled={currentTier === tier.id}
                       onClick={() =>
                         toast.error("Stripe prices not configured. Add price IDs to .env")
                       }

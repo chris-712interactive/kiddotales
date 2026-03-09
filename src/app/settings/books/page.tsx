@@ -10,6 +10,7 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -195,12 +196,29 @@ export default function ManageBooksPage() {
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-2">
+                        {subscriptionTier === "free" ? (
+                          <Link href="/pricing">
+                            <Button size="sm" variant="outline" title="Upgrade to correct books">
+                              <Pencil className="size-4" />
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/book?id=${book.id}&correct=1`}
+                            onMouseEnter={() => prefetchBook(book.id)}
+                            onFocus={() => prefetchBook(book.id)}
+                          >
+                            <Button size="sm" variant="outline" title="Correct">
+                              <Pencil className="size-4" />
+                            </Button>
+                          </Link>
+                        )}
                         <Link
                           href={`/book?id=${book.id}`}
                           onMouseEnter={() => prefetchBook(book.id)}
                           onFocus={() => prefetchBook(book.id)}
                         >
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" title="Open">
                             <ExternalLink className="size-4" />
                           </Button>
                         </Link>

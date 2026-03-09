@@ -21,6 +21,8 @@ export interface BookData {
   coverImageUrl?: string;
   /** Base64 data URL for persistent storage */
   coverImageData?: string;
+  /** Stored creation form data for correction flow */
+  creationMetadata?: CreationMetadata;
 }
 
 /** Optional physical appearance for character consistency in illustrations */
@@ -42,6 +44,20 @@ export interface CreateFormData {
   artStyle: string;
   /** Optional appearance overrides for the main character */
   appearance?: CharacterAppearance;
+}
+
+/** Stored with each book for correction flow */
+export type CreationMetadata = CreateFormData;
+
+export interface ChildProfile {
+  id: string;
+  name: string;
+  age: number;
+  pronouns: string;
+  interests: string[];
+  appearance?: CharacterAppearance;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export const HAIR_COLORS = [

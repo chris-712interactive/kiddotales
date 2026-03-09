@@ -1,11 +1,44 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, BookOpen } from "lucide-react";
+import { Sparkles, BookOpen, Check, Loader2 } from "lucide-react";
 
 const STAR_COUNT = 12;
 
-export function LoadingScreen() {
+const GENERATION_STEPS = [
+  "Generating your story",
+  "Creating the cover image",
+  "Illustrating page 1",
+  "Illustrating page 2",
+  "Illustrating page 3",
+  "Illustrating page 4",
+  "Illustrating page 5",
+  "Illustrating page 6",
+  "Illustrating page 7",
+  "Illustrating page 8",
+  "Finishing up",
+];
+
+const STEP_INTERVAL_MS = 15_000;
+
+export function LoadingScreen({ showSteps = false }: { showSteps?: boolean }) {
+  const [completedSteps, setCompletedSteps] = useState(0);
+  const [startTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!showSteps) return;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const step = Math.min(
+        Math.floor(elapsed / STEP_INTERVAL_MS),
+        GENERATION_STEPS.length
+      );
+      setCompletedSteps(step);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [showSteps, startTime]);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-[var(--pastel-blue)] to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-[var(--pastel-blue)] dark:to-[var(--pastel-mint)]">
       {/* Sparkling stars */}
@@ -72,18 +105,56 @@ export function LoadingScreen() {
         <p className="text-center text-xl font-semibold text-foreground md:text-2xl">
           Weaving your magic story...
         </p>
-        <motion.div
-          className="h-2 w-48 overflow-hidden rounded-full bg-primary/20"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
+        {showSteps ? (
+          <div className="w-full max-w-sm space-y-2">
+            {GENERATION_STEPS.map((step, i) => (
+              <div
+                key={step}
+                className="flex items-center gap-3 text-sm"
+              >
+                <div
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-full ${
+                    i < completedSteps
+                      ? "bg-primary text-primary-foreground"
+                      : i === completedSteps
+                        ? "border-2 border-primary bg-primary/20 text-primary"
+                        : "border-2 border-muted-foreground/30 text-muted-foreground"
+                  }`}
+                >
+                  {i < completedSteps ? (
+                    <Check className="size-3.5" />
+                  ) : i === completedSteps ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <span className="text-xs font-medium">{i + 1}</span>
+                  )}
+                </div>
+                <span
+                  className={
+                    i <= completedSteps
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {step}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
           <motion.div
-            className="h-full w-1/3 rounded-full bg-primary"
-            animate={{ x: ["0%", "200%"] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-          />
-        </motion.div>
+            className="h-2 w-48 overflow-hidden rounded-full bg-primary/20"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <motion.div
+              className="h-full w-1/3 rounded-full bg-primary"
+              animate={{ x: ["0%", "200%"] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );

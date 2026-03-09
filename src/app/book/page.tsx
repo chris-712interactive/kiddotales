@@ -14,6 +14,7 @@ import {
   Plus,
   RectangleVertical,
   RectangleHorizontal,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -21,6 +22,8 @@ import { AuthButtons } from "@/components/auth-buttons";
 import { saveBookToHistory, getBookHistory, getBookByCreatedAt } from "@/lib/storage";
 import { toast } from "sonner";
 import type { BookData } from "@/types";
+import { CorrectionModal } from "@/components/correction-modal";
+import { useSession } from "next-auth/react";
 import { PENDING_BOOK_KEY, PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
 
 function BookViewerContent() {
@@ -31,6 +34,32 @@ function BookViewerContent() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [speakingPage, setSpeakingPage] = useState<number | null>(null);
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
+  const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/user/settings")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((res) => res && setSubscriptionTier(res.subscriptionTier ?? "free"))
+        .catch(() => setSubscriptionTier("free"));
+    } else {
+      setSubscriptionTier(null);
+    }
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (!deferredCorrectFromUrl || !book?.id || !session?.user) return;
+    if (subscriptionTier === "free") {
+      toast.error("Upgrade your plan to correct books.");
+      setDeferredCorrectFromUrl(false);
+    } else if (subscriptionTier) {
+      setShowCorrectionModal(true);
+      setDeferredCorrectFromUrl(false);
+    }
+  }, [deferredCorrectFromUrl, book?.id, session?.user, subscriptionTier]);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +97,7 @@ function BookViewerContent() {
               setBook(parsed);
               setLoading(false);
               sessionStorage.removeItem(`${PREFETCH_BOOK_KEY_PREFIX}${bookId}`);
+              if (urlParams?.get("correct") === "1") setDeferredCorrectFromUrl(true);
               return () => { cancelled = true; };
             }
           } catch {
@@ -83,6 +113,7 @@ function BookViewerContent() {
           if (!cancelled) {
             setBook(b ?? null);
             setLoading(false);
+            if (urlParams?.get("correct") === "1") setDeferredCorrectFromUrl(true);
           }
         })
         .catch(() => {
@@ -293,6 +324,25 @@ function BookViewerContent() {
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
         <div className="flex items-center gap-2">
+          {session?.user && book.id && (
+            subscriptionTier === "free" ? (
+              <Link href="/pricing">
+                <Button variant="outline" size="sm" title="Upgrade to correct books">
+                  <Pencil className="mr-1 size-4" />
+                  Upgrade to correct
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCorrectionModal(true)}
+              >
+                <Pencil className="mr-1 size-4" />
+                Correct
+              </Button>
+            )
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -450,6 +500,28 @@ function BookViewerContent() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Correction modal */}
+        {showCorrectionModal && book.id && (
+          <CorrectionModal
+            book={{
+              id: book.id,
+              title: book.title,
+              pages: book.pages,
+              creationMetadata: book.creationMetadata,
+            }}
+            onClose={() => setShowCorrectionModal(false)}
+            onSuccess={(updated) => {
+              setBook({
+                ...book,
+                ...updated,
+                pages: updated.pages ?? book.pages,
+                creationMetadata: updated.creationMetadata ?? book.creationMetadata,
+              });
+              setShowCorrectionModal(false);
+            }}
+          />
+        )}
 
         {/* Page indicator */}
         <div className="mt-6 flex justify-center gap-2">

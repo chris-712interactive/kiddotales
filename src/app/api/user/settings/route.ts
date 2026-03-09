@@ -7,6 +7,7 @@ import {
   getUserBookCountByPeriod,
   getBookLimitForUser,
 } from "@/lib/db";
+import { getStripe } from "@/lib/stripe";
 
 export async function GET() {
   const session = await auth();
@@ -31,6 +32,29 @@ export async function GET() {
 
     const bookCount = await getUserBookCountByPeriod(userId, limitConfig.period);
 
+    let nextBillingDate: string | null = null;
+    let subscriptionStatus: string | null = null;
+    let cancelAtPeriodEnd = false;
+
+    if (profile.stripeSubscriptionId) {
+      const stripe = getStripe();
+      if (stripe) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(
+            profile.stripeSubscriptionId,
+            { expand: ["items.data.price"] }
+          );
+          subscriptionStatus = sub.status;
+          cancelAtPeriodEnd = sub.cancel_at_period_end;
+          if (sub.current_period_end) {
+            nextBillingDate = new Date(sub.current_period_end * 1000).toISOString();
+          }
+        } catch {
+          // Ignore Stripe errors; we'll show what we have
+        }
+      }
+    }
+
     return NextResponse.json({
       profile: {
         ...profile,
@@ -42,6 +66,9 @@ export async function GET() {
       bookLimitPeriod: limitConfig.period,
       subscriptionTier: profile.subscriptionTier,
       theme: profile.theme,
+      nextBillingDate,
+      subscriptionStatus,
+      cancelAtPeriodEnd,
     });
   } catch (e) {
     console.error("GET /api/user/settings:", e);

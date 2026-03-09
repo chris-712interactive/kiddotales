@@ -464,6 +464,12 @@ function SettingsContent() {
                         Manage books
                       </Button>
                     </Link>
+                    <Link href="/settings/profiles">
+                      <Button size="sm" variant="outline">
+                        <User className="mr-1 size-4" />
+                        Child profiles
+                      </Button>
+                    </Link>
                     <Button
                       size="sm"
                       variant="outline"

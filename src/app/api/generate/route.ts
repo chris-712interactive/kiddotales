@@ -12,8 +12,9 @@ import {
   ensureUser,
   getUserProfile,
   getUserBookCountByPeriod,
-  incrementUserBookCount,
+  insertBookUsageEvent,
   saveBookToSupabase,
+  replaceBook,
   getBookLimitForUser,
 } from "@/lib/db";
 import { uploadImageToStorage } from "@/lib/supabase-storage";
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
+      updateBookId,
       childName,
       age,
       pronouns,
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
       lifeLesson,
       artStyle,
       appearance,
-    } = body as { appearance?: CharacterAppearance } & typeof body;
+    } = body as { updateBookId?: string; appearance?: CharacterAppearance } & typeof body;
 
     if (!childName || !interests?.length) {
       return NextResponse.json(
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isCorrection = Boolean(updateBookId);
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       await ensureUser(userId, userEmail);
       const profile = await getUserProfile(userId);
@@ -125,14 +128,17 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-      const { limit, period } = await getBookLimitForUser(userId);
-      const count = await getUserBookCountByPeriod(userId, period);
-      if (count >= limit) {
-        const periodMsg = period === "monthly" ? "this month" : "total";
-        return NextResponse.json(
-          { error: `You've reached your limit of ${limit} books ${periodMsg}. Upgrade your plan for more stories!` },
-          { status: 403 }
-        );
+      if (!isCorrection) {
+        const { limit, period } = await getBookLimitForUser(userId);
+        const count = await getUserBookCountByPeriod(userId, period);
+        const effectiveLimit = count === 0 ? limit + 1 : limit;
+        if (count >= effectiveLimit) {
+          const periodMsg = period === "monthly" ? "this month" : "total";
+          return NextResponse.json(
+            { error: `You've reached your limit of ${limit} books ${periodMsg}. Upgrade your plan for more stories!` },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -335,7 +341,8 @@ export async function POST(request: NextRequest) {
 
     if (hasSupabase) {
       try {
-        const bookId = crypto.randomUUID();
+        const { period } = await getBookLimitForUser(userId);
+        const bookId = updateBookId ?? crypto.randomUUID();
         const storagePath = (name: string) => `books/${bookId}/${name}`;
 
         let coverStorageUrl = book.coverImageUrl ?? null;
@@ -370,8 +377,25 @@ export async function POST(request: NextRequest) {
           coverImageData: undefined,
           pages: book.pages.map(({ imageData: _, ...p }) => p),
         };
-        await saveBookToSupabase(userId, savedBook, bookId);
-        await incrementUserBookCount(userId);
+        const creationMetadata = {
+          childName,
+          age: age || 5,
+          pronouns: pronouns || "they/them",
+          interests: interests || [],
+          lifeLesson: lifeLesson || "kindness",
+          artStyle: artStyle || "whimsical-watercolor",
+          appearance: appearance || {},
+        };
+
+        if (updateBookId) {
+          await replaceBook(bookId, userId, savedBook, creationMetadata);
+        } else {
+          await saveBookToSupabase(userId, savedBook, bookId, creationMetadata);
+        }
+
+        await insertBookUsageEvent(userId, bookId);
+
+        book = { ...book, creationMetadata };
       } catch (dbErr) {
         console.error("[KiddoTales] Supabase save error:", dbErr);
       }

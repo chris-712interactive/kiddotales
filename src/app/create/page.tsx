@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useRef, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -25,7 +25,7 @@ import { AuthButtons } from "@/components/auth-buttons";
 import { LoadingScreen } from "@/components/loading-screen";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PENDING_BOOK_KEY } from "@/lib/constants";
+import { PENDING_BOOK_KEY, PENDING_CORRECTION_KEY } from "@/lib/constants";
 import {
   GENDERS,
   INTERESTS,
@@ -35,6 +35,7 @@ import {
   SKIN_TONES,
   EYE_COLORS,
   type CreateFormData,
+  type ChildProfile,
 } from "@/types";
 import { ParentalConsentModal } from "@/components/parental-consent-modal";
 
@@ -99,15 +100,23 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
   },
 ];
 
-export default function CreatePage() {
+function CreatePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [consentChecked, setConsentChecked] = useState(false);
   const [needsConsent, setNeedsConsent] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("regenerating") !== null
+  );
   const [bookCount, setBookCount] = useState<{ count: number; limit: number; period?: "total" | "monthly" } | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const [profiles, setProfiles] = useState<ChildProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+
+  const [parentGuardianConfirmed, setParentGuardianConfirmed] = useState(false);
 
   const [form, setForm] = useState<CreateFormData>({
     childName: "",
@@ -122,6 +131,31 @@ export default function CreatePage() {
   const [customInterest, setCustomInterest] = useState("");
   const [customPronoun, setCustomPronoun] = useState("");
   const [customLifeLesson, setCustomLifeLesson] = useState("");
+
+  const applyProfile = (profile: ChildProfile | null) => {
+    if (!profile) {
+      setSelectedProfileId(null);
+      setForm({
+        childName: "",
+        age: 5,
+        pronouns: "they/them",
+        interests: [],
+        lifeLesson: "kindness",
+        artStyle: "whimsical-watercolor",
+        appearance: {},
+      });
+      return;
+    }
+    setSelectedProfileId(profile.id);
+    setForm({
+      ...form,
+      childName: profile.name,
+      age: profile.age,
+      pronouns: profile.pronouns,
+      interests: profile.interests ?? [],
+      appearance: profile.appearance ?? {},
+    });
+  };
 
   const toggleInterest = (interest: string) => {
     setForm((prev) => ({
@@ -200,6 +234,7 @@ export default function CreatePage() {
   };
 
   const isSubmittingRef = useRef(false);
+  const regenerationStartedRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/books/count")
@@ -207,6 +242,77 @@ export default function CreatePage() {
       .then(setBookCount)
       .catch(() => setBookCount(null));
   }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/child-profiles")
+      .then((r) => r.json())
+      .then((data) => setProfiles(Array.isArray(data) ? data : []))
+      .catch(() => setProfiles([]));
+  }, [status]);
+
+  useEffect(() => {
+    const regenerating = searchParams.get("regenerating");
+    if (!regenerating || status !== "authenticated") return;
+    if (regenerationStartedRef.current) return;
+    regenerationStartedRef.current = true;
+
+    const payloadStr = typeof window !== "undefined" ? sessionStorage.getItem(PENDING_CORRECTION_KEY) : null;
+    if (!payloadStr) {
+      regenerationStartedRef.current = false;
+      toast.error("Correction session expired. Please try again.");
+      router.replace("/create");
+      return;
+    }
+
+    let payload: { bookId: string; correction: Record<string, unknown> };
+    try {
+      payload = JSON.parse(payloadStr);
+    } catch {
+      regenerationStartedRef.current = false;
+      sessionStorage.removeItem(PENDING_CORRECTION_KEY);
+      toast.error("Invalid correction data. Please try again.");
+      router.replace("/create");
+      return;
+    }
+
+    if (payload.bookId !== regenerating) {
+      regenerationStartedRef.current = false;
+      sessionStorage.removeItem(PENDING_CORRECTION_KEY);
+      router.replace("/create");
+      return;
+    }
+
+    setIsLoading(true);
+    fetch(`/api/books/${regenerating}/correct`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload.correction),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        sessionStorage.removeItem(PENDING_CORRECTION_KEY);
+        if (!data.success && data.error) {
+          regenerationStartedRef.current = false;
+          toast.error(data.error || "Failed to apply correction.");
+          setIsLoading(false);
+          router.replace("/create");
+          return;
+        }
+        const book = data.book;
+        if (book?.id && typeof window !== "undefined") {
+          sessionStorage.setItem(PENDING_BOOK_KEY, JSON.stringify(book));
+        }
+        router.replace(book?.id ? `/book?id=${book.id}` : "/create");
+      })
+      .catch(() => {
+        regenerationStartedRef.current = false;
+        sessionStorage.removeItem(PENDING_CORRECTION_KEY);
+        toast.error("Something went wrong.");
+        setIsLoading(false);
+        router.replace("/create");
+      });
+  }, [searchParams, status, router]);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) {
@@ -244,6 +350,12 @@ export default function CreatePage() {
 
     if (!form.childName.trim()) {
       toast.error("Please enter your child's name.");
+      isSubmittingRef.current = false;
+      return;
+    }
+
+    if (!parentGuardianConfirmed) {
+      toast.error("Please confirm you are a parent or guardian.");
       isSubmittingRef.current = false;
       return;
     }
@@ -306,7 +418,7 @@ export default function CreatePage() {
   const resolvedPronouns = form.pronouns === "custom" ? customPronoun : form.pronouns;
   const resolvedLifeLesson = form.lifeLesson === "custom" ? customLifeLesson : form.lifeLesson;
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return <LoadingScreen showSteps />;
 
   if (consentChecked && needsConsent) {
     return (
@@ -363,6 +475,55 @@ export default function CreatePage() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Age gate / parent confirmation */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-border bg-muted/30 p-4 transition-colors hover:bg-muted/50">
+              <input
+                type="checkbox"
+                checked={parentGuardianConfirmed}
+                onChange={(e) => setParentGuardianConfirmed(e.target.checked)}
+                className="mt-1 rounded border-2"
+              />
+              <span className="text-sm text-foreground">
+                I am a parent or guardian creating a story for my child.
+              </span>
+            </label>
+            {/* Optional: Child profile selector */}
+            {profiles.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Use a saved profile (optional)</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={selectedProfileId === null ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => applyProfile(null)}
+                  >
+                    Start fresh
+                  </Button>
+                  {profiles.map((p) => (
+                    <Button
+                      key={p.id}
+                      type="button"
+                      variant={selectedProfileId === p.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => applyProfile(p)}
+                    >
+                      {p.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+                <p className="text-sm text-muted-foreground">
+                  Create a child profile to prefill this form next time.{" "}
+                  <Link href="/settings/profiles" className="font-medium text-primary underline hover:no-underline">
+                    Add a profile in Settings
+                  </Link>
+                </p>
+              </div>
+            )}
+
             {/* Child's name + voice */}
             <div className="space-y-2">
               <Label htmlFor="childName">Child&apos;s name</Label>
@@ -701,8 +862,47 @@ export default function CreatePage() {
               Surprise me!
             </Button>
 
+            {/* Save as profile */}
+            {form.childName.trim() && form.interests.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    const pronouns =
+                      form.pronouns === "custom" ? customPronoun : form.pronouns;
+                    const lifeLesson =
+                      form.lifeLesson === "custom"
+                        ? customLifeLesson
+                        : form.lifeLesson;
+                    const res = await fetch("/api/child-profiles", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        name: form.childName.trim(),
+                        age: form.age,
+                        pronouns: pronouns || "they/them",
+                        interests: form.interests,
+                        appearance: form.appearance ?? {},
+                      }),
+                    });
+                    if (!res.ok) throw new Error("Failed to save");
+                    const profile = await res.json();
+                    setProfiles((prev) => [profile, ...prev]);
+                    setSelectedProfileId(profile.id);
+                    toast.success(`Saved "${profile.name}" as a profile.`);
+                  } catch {
+                    toast.error("Could not save profile.");
+                  }
+                }}
+              >
+                Save as profile for next time
+              </Button>
+            )}
+
             {/* Submit */}
-            <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+            <Button type="submit" size="lg" className="w-full" disabled={isLoading || !parentGuardianConfirmed}>
               <BookOpen className="mr-2 size-5" />
               Create My Book
             </Button>
@@ -710,5 +910,13 @@ export default function CreatePage() {
         </motion.div>
       </main>
     </div>
+  );
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense fallback={<LoadingScreen showSteps />}>
+      <CreatePageContent />
+    </Suspense>
   );
 }

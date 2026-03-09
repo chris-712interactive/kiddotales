@@ -1,6 +1,6 @@
 import { createSupabaseAdmin } from "./supabase";
 import { getBookLimitForTier, type BookLimitPeriod } from "./stripe";
-import type { BookData } from "@/types";
+import type { BookData, CreationMetadata, ChildProfile } from "@/types";
 
 /** @deprecated Use getBookLimitForUser with tier instead */
 const BOOK_LIMIT = parseInt(process.env.BOOK_LIMIT_PER_USER || "3", 10);
@@ -71,7 +71,7 @@ export async function getBookLimitForUser(userId: string): Promise<{
   return getBookLimitForTier(tier);
 }
 
-/** Get book count for user by period: total (all time) or monthly (current UTC month). */
+/** Get book usage (creations) for user by period. Deletions do not reduce this. */
 export async function getUserBookCountByPeriod(
   userId: string,
   period: BookLimitPeriod
@@ -82,7 +82,7 @@ export async function getUserBookCountByPeriod(
   const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   let query = supabase
-    .from("books")
+    .from("user_book_usage_events")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId);
 
@@ -95,6 +95,19 @@ export async function getUserBookCountByPeriod(
   const { count, error } = await query;
   if (error) return 0;
   return count ?? 0;
+}
+
+/** Record a book creation usage event (transaction log). */
+export async function insertBookUsageEvent(
+  userId: string,
+  bookId?: string
+): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase.from("user_book_usage_events").insert({
+    user_id: userId,
+    book_id: bookId ?? null,
+    created_at: new Date().toISOString(),
+  });
 }
 
 /** Max number of saved books to show in history (Spark: 10, Magic/Legend: unlimited). */
@@ -185,7 +198,8 @@ export async function incrementUserBookCount(userId: string): Promise<void> {
 export async function saveBookToSupabase(
   userId: string,
   book: BookData,
-  bookId?: string
+  bookId?: string,
+  creationMetadata?: CreationMetadata | null
 ): Promise<string> {
   const supabase = createSupabaseAdmin();
   const row = {
@@ -196,6 +210,7 @@ export async function saveBookToSupabase(
     cover_image_url: book.coverImageUrl || null,
     cover_image_data: book.coverImageData || null,
     pages: book.pages,
+    creation_metadata: creationMetadata ?? null,
   };
   const { data, error } = await supabase
     .from("books")
@@ -205,6 +220,25 @@ export async function saveBookToSupabase(
 
   if (error) throw new Error(`Failed to save book: ${error.message}`);
   return data.id;
+}
+
+/** Update last_opened_at for a book when user views it. */
+export async function updateBookLastOpened(bookId: string, userId: string): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase
+    .from("books")
+    .update({ last_opened_at: new Date().toISOString() })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+}
+
+/** Update last_login_at for user (call on sign-in). */
+export async function updateUserLastLogin(userId: string): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase
+    .from("users")
+    .update({ last_login_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", userId);
 }
 
 /** Get book by ID. Optionally restrict to userId for auth. */
@@ -228,7 +262,87 @@ export async function getBookById(
     createdAt: data.created_at,
     coverImageUrl: data.cover_image_url || undefined,
     coverImageData: data.cover_image_data || undefined,
+    creationMetadata: (data.creation_metadata as CreationMetadata) || undefined,
   };
+}
+
+/** Update book pages in place (for no-cost name correction). */
+export async function updateBookPages(
+  bookId: string,
+  userId: string,
+  pages: BookData["pages"]
+): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("books")
+    .update({ pages, updated_at: new Date().toISOString() })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+/** Update title, pages, and creation_metadata for name-only correction. */
+export async function updateBookForNameCorrection(
+  bookId: string,
+  userId: string,
+  data: {
+    title: string;
+    pages: BookData["pages"];
+    creationMetadata: CreationMetadata;
+  }
+): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("books")
+    .update({
+      title: data.title,
+      pages: data.pages,
+      creation_metadata: data.creationMetadata,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+/** Update book creation_metadata (after correction). */
+export async function updateBookCreationMetadata(
+  bookId: string,
+  userId: string,
+  metadata: CreationMetadata
+): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("books")
+    .update({
+      creation_metadata: metadata,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+/** Replace book content (for regeneration correction). Keeps id and created_at. */
+export async function replaceBook(
+  bookId: string,
+  userId: string,
+  book: Pick<BookData, "title" | "pages" | "coverImageUrl">,
+  creationMetadata: CreationMetadata
+): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("books")
+    .update({
+      title: book.title,
+      pages: book.pages,
+      cover_image_url: book.coverImageUrl || null,
+      creation_metadata: creationMetadata,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+  return !error;
 }
 
 /** Get books for user (for "My Books" / history). Uses tier for limit. */
@@ -274,7 +388,7 @@ export async function revokeParentConsent(userId: string): Promise<void> {
   }).eq("id", userId);
 }
 
-/** Delete a single book by ID. Caller must verify userId owns the book. */
+/** Delete a single book by ID. Caller must verify userId owns the book. Does not affect usage count. */
 export async function deleteBook(bookId: string, userId: string): Promise<boolean> {
   const supabase = createSupabaseAdmin();
   const { error } = await supabase
@@ -282,17 +396,11 @@ export async function deleteBook(bookId: string, userId: string): Promise<boolea
     .delete()
     .eq("id", bookId)
     .eq("user_id", userId);
-  if (error) return false;
-  const count = await getUserBookCount(userId);
-  await supabase.from("user_book_counts").upsert(
-    { user_id: userId, book_count: Math.max(0, count - 1), updated_at: new Date().toISOString() },
-    { onConflict: "user_id" }
-  );
-  return true;
+  return !error;
 }
 
-/** Get all books for user (no limit). For manage/delete UI. */
-export async function getAllBooksByUserId(userId: string): Promise<BookData[]> {
+/** Get all books for user (no limit). For manage/delete UI. Includes lastOpenedAt for retention warnings. */
+export async function getAllBooksByUserId(userId: string): Promise<(BookData & { lastOpenedAt?: string | null })[]> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("books")
@@ -309,7 +417,161 @@ export async function getAllBooksByUserId(userId: string): Promise<BookData[]> {
     createdAt: row.created_at,
     coverImageUrl: row.cover_image_url || undefined,
     coverImageData: row.cover_image_data || undefined,
+    lastOpenedAt: row.last_opened_at ?? null,
   }));
+}
+
+/** Run retention deletion: remove books per free-tier policy. Returns count deleted. */
+export async function runRetentionDeletion(): Promise<{ deletedBooks: number }> {
+  const supabase = createSupabaseAdmin();
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+  const { data: freeUsers } = await supabase
+    .from("users")
+    .select("id, last_login_at")
+    .eq("subscription_tier", "free");
+
+  const freeUserIds = (freeUsers ?? []).map((u) => u.id);
+  if (freeUserIds.length === 0) return { deletedBooks: 0 };
+
+  const { data: books } = await supabase
+    .from("books")
+    .select("id, user_id, created_at, last_opened_at")
+    .in("user_id", freeUserIds);
+
+  const userMap = new Map((freeUsers ?? []).map((u) => [u.id, u]));
+  let deleted = 0;
+
+  for (const book of books ?? []) {
+    const user = userMap.get(book.user_id);
+    if (!user) continue;
+
+    const lastOpened = book.last_opened_at ? new Date(book.last_opened_at) : new Date(book.created_at);
+    const createdAt = new Date(book.created_at);
+    const lastLogin = user.last_login_at ? new Date(user.last_login_at) : null;
+
+    const shouldDeleteByRule1 =
+      (!lastLogin || lastLogin < thirtyDaysAgo) && createdAt < threeMonthsAgo;
+    const shouldDeleteByRule2 = lastOpened < ninetyDaysAgo;
+
+    if (shouldDeleteByRule1 || shouldDeleteByRule2) {
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const { deleteBookStorage } = await import("./supabase-storage");
+        await deleteBookStorage(book.id);
+      }
+      const ok = await deleteBook(book.id, book.user_id);
+      if (ok) deleted++;
+    }
+  }
+
+  return { deletedBooks: deleted };
+}
+
+/** Get child profiles for user. */
+export async function getChildProfiles(userId: string): Promise<ChildProfile[]> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("child_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+  return (data || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    age: row.age ?? 5,
+    pronouns: row.pronouns ?? "they/them",
+    interests: (row.interests as string[]) ?? [],
+    appearance: (row.appearance as ChildProfile["appearance"]) ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+  }));
+}
+
+/** Create child profile. */
+export async function createChildProfile(
+  userId: string,
+  profile: Omit<ChildProfile, "id" | "createdAt" | "updatedAt">
+): Promise<ChildProfile | null> {
+  const supabase = createSupabaseAdmin();
+  const row = {
+    user_id: userId,
+    name: profile.name,
+    age: profile.age,
+    pronouns: profile.pronouns,
+    interests: profile.interests,
+    appearance: profile.appearance ?? {},
+  };
+  const { data, error } = await supabase
+    .from("child_profiles")
+    .insert(row)
+    .select("*")
+    .single();
+
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    name: data.name,
+    age: data.age ?? 5,
+    pronouns: data.pronouns ?? "they/them",
+    interests: (data.interests as string[]) ?? [],
+    appearance: (data.appearance as ChildProfile["appearance"]) ?? undefined,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at ?? undefined,
+  };
+}
+
+/** Update child profile. */
+export async function updateChildProfile(
+  profileId: string,
+  userId: string,
+  updates: Partial<Omit<ChildProfile, "id" | "createdAt" | "updatedAt">>
+): Promise<ChildProfile | null> {
+  const supabase = createSupabaseAdmin();
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.age !== undefined) payload.age = updates.age;
+  if (updates.pronouns !== undefined) payload.pronouns = updates.pronouns;
+  if (updates.interests !== undefined) payload.interests = updates.interests;
+  if (updates.appearance !== undefined) payload.appearance = updates.appearance;
+
+  const { data, error } = await supabase
+    .from("child_profiles")
+    .update(payload)
+    .eq("id", profileId)
+    .eq("user_id", userId)
+    .select("*")
+    .single();
+
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    name: data.name,
+    age: data.age ?? 5,
+    pronouns: data.pronouns ?? "they/them",
+    interests: (data.interests as string[]) ?? [],
+    appearance: (data.appearance as ChildProfile["appearance"]) ?? undefined,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at ?? undefined,
+  };
+}
+
+/** Delete child profile. */
+export async function deleteChildProfile(
+  profileId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("child_profiles")
+    .delete()
+    .eq("id", profileId)
+    .eq("user_id", userId);
+  return !error;
 }
 
 /** Delete all books and child data for a user. Resets book count. */
@@ -322,6 +584,7 @@ export async function deleteAllUserChildData(userId: string): Promise<{ deletedB
   const count = books?.length ?? 0;
 
   await supabase.from("books").delete().eq("user_id", userId);
+  await supabase.from("child_profiles").delete().eq("user_id", userId);
   await supabase.from("user_book_counts").upsert(
     { user_id: userId, book_count: 0, updated_at: new Date().toISOString() },
     { onConflict: "user_id" }

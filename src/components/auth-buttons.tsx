@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
+import { NotificationCenter } from "@/components/notification-center";
 
 export function AuthButtons() {
   const { data: session, status } = useSession();
@@ -15,6 +16,7 @@ export function AuthButtons() {
   if (session?.user) {
     return (
       <div className="flex items-center gap-2">
+        <NotificationCenter />
         <span className="hidden text-sm text-muted-foreground sm:inline">
           {session.user.email}
         </span>

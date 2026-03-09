@@ -10,6 +10,7 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,24 +23,37 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AuthButtons } from "@/components/auth-buttons";
 import { toast } from "sonner";
+import { PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
 
 type BookItem = {
   id: string;
   title: string;
   createdAt: string;
   coverImageUrl?: string;
+  lastOpenedAt?: string | null;
 };
+
+function daysSinceOpened(book: BookItem): number {
+  const ref = book.lastOpenedAt ? new Date(book.lastOpenedAt) : new Date(book.createdAt);
+  return Math.floor((Date.now() - ref.getTime()) / (1000 * 60 * 60 * 24));
+}
 
 export default function ManageBooksPage() {
   const [books, setBooks] = useState<BookItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteAllLoading, setDeleteAllLoading] = useState(false);
 
   const fetchBooks = () => {
-    fetch("/api/user/child-data?all=true")
-      .then((r) => (r.ok ? r.json() : { books: [] }))
-      .then((data) => setBooks(data.books ?? []))
+    Promise.all([
+      fetch("/api/user/child-data?all=true").then((r) => (r.ok ? r.json() : { books: [] })),
+      fetch("/api/user/settings").then((r) => (r.ok ? r.json() : { profile: {} })),
+    ])
+      .then(([data, settings]) => {
+        setBooks(data.books ?? []);
+        setSubscriptionTier(settings?.profile?.subscriptionTier ?? "free");
+      })
       .catch(() => setBooks([]))
       .finally(() => setLoading(false));
   };
@@ -63,6 +77,20 @@ export default function ManageBooksPage() {
       toast.error("Could not delete book");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const prefetchBook = (bookId: string) => {
+    const key = `${PREFETCH_BOOK_KEY_PREFIX}${bookId}`;
+    if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
+      fetch(`/api/books/${bookId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b) => {
+          if (b && typeof window !== "undefined") {
+            sessionStorage.setItem(key, JSON.stringify(b));
+          }
+        })
+        .catch(() => {});
     }
   };
 
@@ -160,11 +188,37 @@ export default function ManageBooksPage() {
                         <p className="truncate font-medium">{book.title}</p>
                         <p className="text-sm text-muted-foreground">
                           {new Date(book.createdAt).toLocaleDateString()}
+                          {subscriptionTier === "free" && daysSinceOpened(book) >= 30 && (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                              Not opened in {daysSinceOpened(book)} days – open to keep
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-2">
-                        <Link href={`/book?id=${book.id}`}>
-                          <Button size="sm" variant="outline">
+                        {subscriptionTier === "free" ? (
+                          <Link href="/pricing">
+                            <Button size="sm" variant="outline" title="Upgrade to correct books">
+                              <Pencil className="size-4" />
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/book?id=${book.id}&correct=1`}
+                            onMouseEnter={() => prefetchBook(book.id)}
+                            onFocus={() => prefetchBook(book.id)}
+                          >
+                            <Button size="sm" variant="outline" title="Correct">
+                              <Pencil className="size-4" />
+                            </Button>
+                          </Link>
+                        )}
+                        <Link
+                          href={`/book?id=${book.id}`}
+                          onMouseEnter={() => prefetchBook(book.id)}
+                          onFocus={() => prefetchBook(book.id)}
+                        >
+                          <Button size="sm" variant="outline" title="Open">
                             <ExternalLink className="size-4" />
                           </Button>
                         </Link>

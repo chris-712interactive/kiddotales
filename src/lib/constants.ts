@@ -83,4 +83,6 @@ export const ART_STYLE_PROMPTS: Record<string, string> = {
 
 export const BOOK_HISTORY_KEY = "kiddotales-book-history";
 export const PENDING_BOOK_KEY = "kiddotales-pending-book";
+export const PENDING_CORRECTION_KEY = "kiddotales-pending-correction";
+export const PREFETCH_BOOK_KEY_PREFIX = "kiddotales-prefetch-";
 export const MAX_HISTORY_BOOKS = 5;

@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { ensureUser, updateUserLastLogin } from "@/lib/db";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [Google],
@@ -8,6 +9,18 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     signIn: "/sign-in",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      const userId = (account?.providerAccountId ?? user?.id ?? user?.email) as string | undefined;
+      if (userId && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        try {
+          await ensureUser(userId, user?.email ?? undefined);
+          await updateUserLastLogin(userId);
+        } catch {
+          // Non-fatal: allow sign-in even if DB update fails
+        }
+      }
+      return true;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isCreatePage = nextUrl.pathname.startsWith("/create");

@@ -14,6 +14,7 @@ import {
   Plus,
   RectangleVertical,
   RectangleHorizontal,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -21,49 +22,125 @@ import { AuthButtons } from "@/components/auth-buttons";
 import { saveBookToHistory, getBookHistory, getBookByCreatedAt } from "@/lib/storage";
 import { toast } from "sonner";
 import type { BookData } from "@/types";
-import { PENDING_BOOK_KEY } from "@/lib/constants";
+import { CorrectionModal } from "@/components/correction-modal";
+import { useSession } from "next-auth/react";
+import { PENDING_BOOK_KEY, PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
 
 function BookViewerContent() {
   const searchParams = useSearchParams();
   const [book, setBook] = useState<BookData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [speakingPage, setSpeakingPage] = useState<number | null>(null);
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
+  const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
+  const { data: session } = useSession();
 
   useEffect(() => {
-    const bookId = searchParams.get("id");
-    const createdAt = searchParams.get("createdAt");
-    const dataParam = searchParams.get("data");
+    if (session?.user) {
+      fetch("/api/user/settings")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((res) => res && setSubscriptionTier(res.subscriptionTier ?? "free"))
+        .catch(() => setSubscriptionTier("free"));
+    } else {
+      setSubscriptionTier(null);
+    }
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (!deferredCorrectFromUrl || !book?.id || !session?.user) return;
+    if (subscriptionTier === "free") {
+      toast.error("Upgrade your plan to correct books.");
+      setDeferredCorrectFromUrl(false);
+    } else if (subscriptionTier) {
+      setShowCorrectionModal(true);
+      setDeferredCorrectFromUrl(false);
+    }
+  }, [deferredCorrectFromUrl, book?.id, session?.user, subscriptionTier]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Use URL as source of truth for id (avoids searchParams race on client nav)
+    const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const bookId = searchParams.get("id") ?? urlParams?.get("id") ?? null;
+    const createdAt = searchParams.get("createdAt") ?? urlParams?.get("createdAt") ?? null;
+    const dataParam = searchParams.get("data") ?? urlParams?.get("data") ?? null;
 
     if (bookId) {
-      // Use sessionStorage first for just-created books (instant display)
-      const pending = typeof window !== "undefined" ? sessionStorage.getItem(PENDING_BOOK_KEY) : null;
-      if (pending) {
-        try {
-          const parsed = JSON.parse(pending) as BookData;
-          if (parsed.id === bookId) {
-            setBook(parsed);
-            saveBookToHistory(parsed).finally(() => {
-              sessionStorage.removeItem(PENDING_BOOK_KEY);
-            });
-            return;
+      // Use sessionStorage first for just-created or prefetched books (instant display)
+      if (typeof window !== "undefined") {
+        const pending = sessionStorage.getItem(PENDING_BOOK_KEY);
+        if (pending) {
+          try {
+            const parsed = JSON.parse(pending) as BookData;
+            if (parsed.id === bookId) {
+              setBook(parsed);
+              setLoading(false);
+              saveBookToHistory(parsed).finally(() => {
+                sessionStorage.removeItem(PENDING_BOOK_KEY);
+              });
+              return () => { cancelled = true; };
+            }
+          } catch {
+            sessionStorage.removeItem(PENDING_BOOK_KEY);
           }
-        } catch {
-          sessionStorage.removeItem(PENDING_BOOK_KEY);
+        }
+        const prefetched = sessionStorage.getItem(`${PREFETCH_BOOK_KEY_PREFIX}${bookId}`);
+        if (prefetched) {
+          try {
+            const parsed = JSON.parse(prefetched) as BookData;
+            if (parsed.id === bookId) {
+              setBook(parsed);
+              setLoading(false);
+              sessionStorage.removeItem(`${PREFETCH_BOOK_KEY_PREFIX}${bookId}`);
+              if (urlParams?.get("correct") === "1") setDeferredCorrectFromUrl(true);
+              return () => { cancelled = true; };
+            }
+          } catch {
+            sessionStorage.removeItem(`${PREFETCH_BOOK_KEY_PREFIX}${bookId}`);
+          }
         }
       }
       // Fallback: fetch from API (for cross-device or direct links)
+      setLoading(true);
       fetch(`/api/books/${bookId}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((b) => setBook(b ?? null))
-        .catch(() => setBook(null));
-      return;
+        .then((b) => {
+          if (!cancelled) {
+            setBook(b ?? null);
+            setLoading(false);
+            if (urlParams?.get("correct") === "1") setDeferredCorrectFromUrl(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBook(null);
+            setLoading(false);
+          }
+        });
+      return () => { cancelled = true; };
     }
 
     if (createdAt) {
-      getBookByCreatedAt(createdAt).then((b) => setBook(b ?? null));
-      return;
+      setLoading(true);
+      getBookByCreatedAt(createdAt)
+        .then((b) => {
+          if (!cancelled) {
+            setBook(b ?? null);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBook(null);
+            setLoading(false);
+          }
+        });
+      return () => { cancelled = true; };
     }
 
     if (typeof window !== "undefined") {
@@ -72,14 +149,29 @@ function BookViewerContent() {
         try {
           const parsed = JSON.parse(pending) as BookData;
           setBook(parsed);
+          setLoading(false);
           saveBookToHistory(parsed).finally(() => {
             sessionStorage.removeItem(PENDING_BOOK_KEY);
           });
+          return () => { cancelled = true; };
         } catch {
           sessionStorage.removeItem(PENDING_BOOK_KEY);
-          getBookHistory().then((history) => setBook(history[0] ?? null));
+          setLoading(true);
+          getBookHistory()
+            .then((history) => {
+              if (!cancelled) {
+                setBook(history[0] ?? null);
+                setLoading(false);
+              }
+            })
+            .catch(() => {
+              if (!cancelled) {
+                setBook(null);
+                setLoading(false);
+              }
+            });
         }
-        return;
+        return () => { cancelled = true; };
       }
     }
 
@@ -87,16 +179,47 @@ function BookViewerContent() {
       try {
         const parsed = JSON.parse(decodeURIComponent(dataParam)) as BookData;
         setBook(parsed);
+        setLoading(false);
         saveBookToHistory(parsed);
+        return () => { cancelled = true; };
       } catch {
-        getBookHistory().then((history) => setBook(history[0] ?? null));
+        setLoading(true);
+        getBookHistory()
+          .then((history) => {
+            if (!cancelled) {
+              setBook(history[0] ?? null);
+              setLoading(false);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setBook(null);
+              setLoading(false);
+            }
+          });
       }
-      return;
+      return () => { cancelled = true; };
     }
 
     if (typeof window !== "undefined") {
-      getBookHistory().then((history) => setBook(history[0] ?? null));
+      setLoading(true);
+      getBookHistory()
+        .then((history) => {
+          if (!cancelled) {
+            setBook(history[0] ?? null);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBook(null);
+            setLoading(false);
+          }
+        });
+    } else {
+      setLoading(false);
     }
+    return () => { cancelled = true; };
   }, [searchParams]);
 
   const handleReadAloud = useCallback(
@@ -155,6 +278,20 @@ function BookViewerContent() {
     [book]
   );
 
+  // If URL has ?id= but we don't have book yet, show loading (handles searchParams race on nav)
+  const hasIdInUrl =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("id");
+
+  if (loading || (!book && hasIdInUrl)) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="text-muted-foreground">Loading your book…</p>
+      </div>
+    );
+  }
+
   if (!book) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
@@ -187,6 +324,25 @@ function BookViewerContent() {
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
         <div className="flex items-center gap-2">
+          {session?.user && book.id && (
+            subscriptionTier === "free" ? (
+              <Link href="/pricing">
+                <Button variant="outline" size="sm" title="Upgrade to correct books">
+                  <Pencil className="mr-1 size-4" />
+                  Upgrade to correct
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCorrectionModal(true)}
+              >
+                <Pencil className="mr-1 size-4" />
+                Correct
+              </Button>
+            )
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -344,6 +500,28 @@ function BookViewerContent() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Correction modal */}
+        {showCorrectionModal && book.id && (
+          <CorrectionModal
+            book={{
+              id: book.id,
+              title: book.title,
+              pages: book.pages,
+              creationMetadata: book.creationMetadata,
+            }}
+            onClose={() => setShowCorrectionModal(false)}
+            onSuccess={(updated) => {
+              setBook({
+                ...book,
+                ...updated,
+                pages: updated.pages ?? book.pages,
+                creationMetadata: updated.creationMetadata ?? book.creationMetadata,
+              });
+              setShowCorrectionModal(false);
+            }}
+          />
+        )}
 
         {/* Page indicator */}
         <div className="mt-6 flex justify-center gap-2">

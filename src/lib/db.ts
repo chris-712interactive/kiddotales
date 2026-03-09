@@ -207,6 +207,25 @@ export async function saveBookToSupabase(
   return data.id;
 }
 
+/** Update last_opened_at for a book when user views it. */
+export async function updateBookLastOpened(bookId: string, userId: string): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase
+    .from("books")
+    .update({ last_opened_at: new Date().toISOString() })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+}
+
+/** Update last_login_at for user (call on sign-in). */
+export async function updateUserLastLogin(userId: string): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase
+    .from("users")
+    .update({ last_login_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", userId);
+}
+
 /** Get book by ID. Optionally restrict to userId for auth. */
 export async function getBookById(
   bookId: string,
@@ -291,8 +310,8 @@ export async function deleteBook(bookId: string, userId: string): Promise<boolea
   return true;
 }
 
-/** Get all books for user (no limit). For manage/delete UI. */
-export async function getAllBooksByUserId(userId: string): Promise<BookData[]> {
+/** Get all books for user (no limit). For manage/delete UI. Includes lastOpenedAt for retention warnings. */
+export async function getAllBooksByUserId(userId: string): Promise<(BookData & { lastOpenedAt?: string | null })[]> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("books")
@@ -309,7 +328,57 @@ export async function getAllBooksByUserId(userId: string): Promise<BookData[]> {
     createdAt: row.created_at,
     coverImageUrl: row.cover_image_url || undefined,
     coverImageData: row.cover_image_data || undefined,
+    lastOpenedAt: row.last_opened_at ?? null,
   }));
+}
+
+/** Run retention deletion: remove books per free-tier policy. Returns count deleted. */
+export async function runRetentionDeletion(): Promise<{ deletedBooks: number }> {
+  const supabase = createSupabaseAdmin();
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+  const { data: freeUsers } = await supabase
+    .from("users")
+    .select("id, last_login_at")
+    .eq("subscription_tier", "free");
+
+  const freeUserIds = (freeUsers ?? []).map((u) => u.id);
+  if (freeUserIds.length === 0) return { deletedBooks: 0 };
+
+  const { data: books } = await supabase
+    .from("books")
+    .select("id, user_id, created_at, last_opened_at")
+    .in("user_id", freeUserIds);
+
+  const userMap = new Map((freeUsers ?? []).map((u) => [u.id, u]));
+  let deleted = 0;
+
+  for (const book of books ?? []) {
+    const user = userMap.get(book.user_id);
+    if (!user) continue;
+
+    const lastOpened = book.last_opened_at ? new Date(book.last_opened_at) : new Date(book.created_at);
+    const createdAt = new Date(book.created_at);
+    const lastLogin = user.last_login_at ? new Date(user.last_login_at) : null;
+
+    const shouldDeleteByRule1 =
+      (!lastLogin || lastLogin < thirtyDaysAgo) && createdAt < threeMonthsAgo;
+    const shouldDeleteByRule2 = lastOpened < ninetyDaysAgo;
+
+    if (shouldDeleteByRule1 || shouldDeleteByRule2) {
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const { deleteBookStorage } = await import("./supabase-storage");
+        await deleteBookStorage(book.id);
+      }
+      const ok = await deleteBook(book.id, book.user_id);
+      if (ok) deleted++;
+    }
+  }
+
+  return { deletedBooks: deleted };
 }
 
 /** Delete all books and child data for a user. Resets book count. */

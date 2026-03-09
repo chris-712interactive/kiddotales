@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getBookById, deleteBook } from "@/lib/db";
+import { getBookById, deleteBook, updateBookLastOpened } from "@/lib/db";
 import { deleteBookStorage } from "@/lib/supabase-storage";
 
 export async function GET(
@@ -20,6 +20,10 @@ export async function GET(
   const book = await getBookById(id, session.user.id);
   if (!book) {
     return NextResponse.json({ error: "Book not found" }, { status: 404 });
+  }
+
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    updateBookLastOpened(id, session.user.id).catch(() => {});
   }
 
   return NextResponse.json({ ...book, id });

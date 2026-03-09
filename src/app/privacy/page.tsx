@@ -94,7 +94,39 @@ export default function PrivacyPage() {
           <section className="mt-6 space-y-4">
             <h2 className="text-xl font-semibold text-foreground">5. Data Retention</h2>
             <p className="text-muted-foreground">
-              We retain your child&apos;s information and books for as long as your account is active. You may request deletion at any time (see Parent Rights below). We retain data for up to 12 months after account deletion or deletion request for backup and legal purposes, after which it is permanently removed.
+              You may request deletion of your child&apos;s data at any time (see Parent Rights below). That is our primary retention mechanism. In addition, we automatically remove data according to the following rules:
+            </p>
+
+            <h3 className="mt-4 text-lg font-medium text-foreground">5.1 Delete on Request</h3>
+            <p className="text-muted-foreground">
+              You can delete individual books or all your books at any time from <Link href="/settings/books" className="underline hover:text-foreground">Manage books</Link>. We process deletion requests promptly and remove data from our systems and storage.
+            </p>
+
+            <h3 className="mt-4 text-lg font-medium text-foreground">5.2 Free Tier Retention</h3>
+            <p className="text-muted-foreground">
+              If you are on the free tier, we may automatically delete your books when <strong>both</strong> of the following are true:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <li>You have not logged in for more than 30 consecutive days (&quot;inactive&quot; means no login to your account)</li>
+              <li>The books are older than 3 months from their creation date</li>
+            </ul>
+            <p className="text-muted-foreground">
+              We also remove individual books on the free tier if a book has not been opened for 90 consecutive days. We show warnings in <Link href="/settings/books" className="underline hover:text-foreground">Manage books</Link> and in your notifications when a book has not been opened in over 30 days, so you can open it to keep it.
+            </p>
+
+            <h3 className="mt-4 text-lg font-medium text-foreground">5.3 Paid Tier Retention</h3>
+            <p className="text-muted-foreground">
+              If you have an active paid subscription (Spark, Magic, or Legend), we retain your books for as long as your subscription is active. The per-book 90-day inactivity rule does not apply to paid tiers.
+            </p>
+
+            <h3 className="mt-4 text-lg font-medium text-foreground">5.4 Downgrade from Paid to Free</h3>
+            <p className="text-muted-foreground">
+              When your paid subscription ends and you return to the free tier, the free tier retention rules apply from that date. Books may be removed according to the free tier rules above.
+            </p>
+
+            <h3 className="mt-4 text-lg font-medium text-foreground">5.5 Backup and Legal Hold</h3>
+            <p className="text-muted-foreground">
+              After you request deletion or after automatic removal, we may retain data for up to 12 months in backup systems for legal and operational purposes, after which it is permanently removed.
             </p>
           </section>
 
@@ -105,8 +137,8 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
               <li><strong>Access</strong> – View the personal information we have collected about your child</li>
-              <li><strong>Correct</strong> – Request correction of inaccurate information</li>
-              <li><strong>Delete</strong> – Request deletion of all your child&apos;s data and books</li>
+              <li><strong>Correct</strong> – Request correction of inaccurate information (you can delete a book and create a new one with corrected details)</li>
+              <li><strong>Delete</strong> – Request deletion of all your child&apos;s data and books at any time</li>
               <li><strong>Revoke consent</strong> – Withdraw consent and stop future collection</li>
             </ul>
             <p className="text-muted-foreground">

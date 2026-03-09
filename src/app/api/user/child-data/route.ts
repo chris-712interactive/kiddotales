@@ -34,6 +34,7 @@ export async function GET(request: Request) {
         title: b.title,
         createdAt: b.createdAt,
         coverImageUrl: b.coverImageUrl,
+        lastOpenedAt: (b as { lastOpenedAt?: string | null }).lastOpenedAt ?? null,
       })),
     });
   } catch (e) {

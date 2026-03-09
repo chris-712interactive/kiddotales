@@ -88,14 +88,13 @@ Before collecting child data, parents must receive a **direct notice** (not just
 
 COPPA requires you to **not retain child data longer than necessary** and to state retention periods.
 
-**Recommended:**
-- **Books**: Retain for [X] months after last activity, or until parent requests deletion
-- **User/child metadata**: Same as books, or until account deletion
-- **Logs**: Short retention (e.g., 30–90 days) for security/ops only
-
-**Action:** Define retention periods in your privacy policy and implement:
-- Scheduled jobs to delete old data
-- Or "delete on request" with a clear process
+**Implemented (hybrid model):**
+- **Delete on request** – Primary mechanism; parents can delete anytime from Manage books
+- **Free tier** – Books deleted when user inactive 30+ days (no login) AND books older than 3 months
+- **Per-book 90-day rule** – Free tier books not opened in 90 days are removed
+- **Paid tier** – Retained while subscription is active
+- **Downgrade** – Free tier rules apply when subscription ends
+- **Cron job** – `/api/cron/retention` runs daily (Vercel Cron at 2am UTC)
 
 ---
 

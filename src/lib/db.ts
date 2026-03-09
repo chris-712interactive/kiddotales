@@ -16,6 +16,8 @@ export type UserProfile = {
   stripeSubscriptionId?: string | null;
   stripeSubscriptionStatus?: string | null;
   stripePriceId?: string | null;
+  parentConsentAt?: string | null;
+  parentConsentVersion?: string | null;
   createdAt: string;
   updatedAt: string | null;
 };
@@ -34,7 +36,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, created_at, updated_at")
+    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, parent_consent_at, parent_consent_version, created_at, updated_at")
     .eq("id", userId)
     .single();
 
@@ -52,6 +54,8 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     stripeSubscriptionId: data.stripe_subscription_id ?? null,
     stripeSubscriptionStatus: data.stripe_subscription_status ?? null,
     stripePriceId: data.stripe_price_id ?? null,
+    parentConsentAt: data.parent_consent_at ?? null,
+    parentConsentVersion: data.parent_consent_version ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at ?? null,
   };
@@ -248,6 +252,82 @@ export async function getBooksByUserId(userId: string, tier?: string): Promise<B
     coverImageUrl: row.cover_image_url || undefined,
     coverImageData: row.cover_image_data || undefined,
   }));
+}
+
+/** Record verifiable parental consent (COPPA). */
+export async function recordParentConsent(userId: string): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase.from("users").update({
+    parent_consent_at: new Date().toISOString(),
+    parent_consent_version: "1.0",
+    updated_at: new Date().toISOString(),
+  }).eq("id", userId);
+}
+
+/** Revoke parental consent. Blocks future book creation until re-consent. */
+export async function revokeParentConsent(userId: string): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase.from("users").update({
+    parent_consent_at: null,
+    parent_consent_version: null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", userId);
+}
+
+/** Delete a single book by ID. Caller must verify userId owns the book. */
+export async function deleteBook(bookId: string, userId: string): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("books")
+    .delete()
+    .eq("id", bookId)
+    .eq("user_id", userId);
+  if (error) return false;
+  const count = await getUserBookCount(userId);
+  await supabase.from("user_book_counts").upsert(
+    { user_id: userId, book_count: Math.max(0, count - 1), updated_at: new Date().toISOString() },
+    { onConflict: "user_id" }
+  );
+  return true;
+}
+
+/** Get all books for user (no limit). For manage/delete UI. */
+export async function getAllBooksByUserId(userId: string): Promise<BookData[]> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("books")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    pages: row.pages,
+    createdAt: row.created_at,
+    coverImageUrl: row.cover_image_url || undefined,
+    coverImageData: row.cover_image_data || undefined,
+  }));
+}
+
+/** Delete all books and child data for a user. Resets book count. */
+export async function deleteAllUserChildData(userId: string): Promise<{ deletedBooks: number }> {
+  const supabase = createSupabaseAdmin();
+  const { data: books } = await supabase
+    .from("books")
+    .select("id")
+    .eq("user_id", userId);
+  const count = books?.length ?? 0;
+
+  await supabase.from("books").delete().eq("user_id", userId);
+  await supabase.from("user_book_counts").upsert(
+    { user_id: userId, book_count: 0, updated_at: new Date().toISOString() },
+    { onConflict: "user_id" }
+  );
+
+  return { deletedBooks: count };
 }
 
 export { BOOK_LIMIT };

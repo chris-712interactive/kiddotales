@@ -6,6 +6,7 @@ import "@/styles/custom.scss";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeSync } from "@/components/theme-sync";
 import { AuthSessionProvider } from "@/components/session-provider";
+import { Footer } from "@/components/footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,7 +47,10 @@ export default function RootLayout({
         <AuthSessionProvider>
           <ThemeProvider defaultTheme="light" storageKey="kiddotales-theme">
             <ThemeSync />
-            {children}
+            <div className="flex min-h-screen flex-col">
+              <main className="flex-1">{children}</main>
+              <Footer />
+            </div>
           <Toaster
             position="top-center"
             richColors

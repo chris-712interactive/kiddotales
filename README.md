@@ -86,6 +86,10 @@ src/
 - **/create** – Form: name, age, pronouns, interests, life lesson, art style
 - **/book** – Flip-book viewer with read aloud and PDF download
 
+## COPPA Compliance
+
+KiddoTales collects children's personal information (name, age, interests, etc.) and must comply with COPPA. See **[COPPA_COMPLIANCE.md](./COPPA_COMPLIANCE.md)** for required measures and implementation checklist.
+
 ## License
 
 MIT

@@ -10,20 +10,17 @@ import * as fs from "fs";
 import * as path from "path";
 
 const SAMPLE_PHRASE = "Once upon a time, in a magical land…";
+/** tts-1 model supports 9 voices only (ballad, marin, verse, cedar require gpt-4o-mini-tts) */
 const VOICES = [
   "alloy",
   "ash",
-  "ballad",
   "coral",
   "echo",
   "fable",
-  "marin",
   "nova",
   "onyx",
   "sage",
   "shimmer",
-  "verse",
-  "cedar",
 ] as const;
 
 const OUT_DIR = path.join(process.cwd(), "public", "voice-samples");

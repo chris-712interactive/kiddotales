@@ -141,27 +141,23 @@ export const TTS_DEFAULT_VOICE = "nova";
 /** Magic tier: 3 voice options */
 export const TTS_VOICES_MAGIC = ["nova", "alloy", "shimmer"] as const;
 
-/** Legend tier: all OpenAI TTS voices (tts-1 compatible) */
+/** Legend tier: all OpenAI TTS voices (tts-1 supports 9 voices only) */
 export const TTS_VOICES_LEGEND = [
-  "alloy", "ash", "ballad", "coral", "echo", "fable",
-  "marin", "nova", "onyx", "sage", "shimmer", "verse", "cedar",
+  "alloy", "ash", "coral", "echo", "fable",
+  "nova", "onyx", "sage", "shimmer",
 ] as const;
 
 /** Human-readable labels for voice selector */
 export const TTS_VOICE_LABELS: Record<string, string> = {
   alloy: "Calm & clear",
   ash: "Soft & gentle",
-  ballad: "Warm storyteller",
   coral: "Bright & cheerful",
   echo: "Friendly & steady",
   fable: "Magical & whimsical",
-  marin: "Smooth & engaging",
   nova: "Warm & friendly",
   onyx: "Deep & reassuring",
   sage: "Wise & kind",
   shimmer: "Light & playful",
-  verse: "Expressive & lively",
-  cedar: "Natural & warm",
 };
 
 /** Get allowed voices for a tier */

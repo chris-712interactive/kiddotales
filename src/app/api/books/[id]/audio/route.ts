@@ -113,7 +113,7 @@ export async function POST(
 
       const response = await openai.audio.speech.create({
         model: "tts-1",
-        voice: voice as "alloy" | "ash" | "ballad" | "coral" | "echo" | "fable" | "marin" | "nova" | "onyx" | "sage" | "shimmer" | "verse" | "cedar",
+        voice: voice as "alloy" | "ash" | "coral" | "echo" | "fable" | "nova" | "onyx" | "sage" | "shimmer",
         input: text.slice(0, 4096),
       });
 

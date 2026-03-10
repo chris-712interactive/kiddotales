@@ -106,6 +106,35 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "subscription_schedule.updated":
+      case "subscription_schedule.completed":
+      case "subscription_schedule.released": {
+        // When a schedule phases (e.g. downgrade takes effect), sync our DB
+        const schedule = event.data.object as Stripe.SubscriptionSchedule;
+        const userId = schedule.metadata?.userId;
+        if (!userId || !schedule.subscription) break;
+
+        const sub = await stripe.subscriptions.retrieve(
+          schedule.subscription as string,
+          { expand: ["items.data.price"] }
+        );
+        const priceId =
+          typeof sub.items.data[0]?.price?.id === "string"
+            ? sub.items.data[0].price.id
+            : sub.items.data[0]?.price?.id ?? null;
+        const tier = priceId ? getTierFromPriceId(priceId) : null;
+        const activeStatuses = ["active", "trialing"];
+
+        await updateSubscriptionFromStripe(userId, {
+          stripeSubscriptionStatus: sub.status,
+          stripePriceId: priceId,
+          subscriptionTier: activeStatuses.includes(sub.status)
+            ? (tier ?? "spark")
+            : "free",
+        });
+        break;
+      }
+
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         console.warn("[Stripe webhook] invoice.payment_failed:", invoice.id);

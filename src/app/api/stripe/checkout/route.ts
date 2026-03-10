@@ -55,6 +55,18 @@ export async function POST(req: NextRequest) {
   try {
     await ensureUser(userId, userEmail);
     const profile = await getUserProfile(userId);
+
+    // User already has a subscription - they must use change-plan or portal, not new checkout
+    if (profile?.stripeSubscriptionId) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have an active subscription. Use 'Manage subscription' to change your plan, or use the change-plan API.",
+        },
+        { status: 400 }
+      );
+    }
+
     const stripeCustomerId = profile?.stripeCustomerId ?? undefined;
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;

@@ -92,6 +92,18 @@ export function getBookLimitForTier(tier: string): {
   };
 }
 
+/** Tier rank for upgrade/downgrade comparison (higher = more expensive) */
+const TIER_RANK: Record<SubscriptionTierId, number> = {
+  free: 0,
+  spark: 1,
+  magic: 2,
+  legend: 3,
+};
+
+export function getTierRank(tier: string): number {
+  return TIER_RANK[tier as SubscriptionTierId] ?? 0;
+}
+
 /** Map Stripe price ID to tier */
 export function getTierFromPriceId(priceId: string): SubscriptionTierId | null {
   const priceMap: Record<string, SubscriptionTierId> = {};

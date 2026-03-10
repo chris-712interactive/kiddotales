@@ -96,21 +96,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (newTierRank > currentTierRank) {
-      // Upgrade: immediate change with proration (default behavior)
-      const updated = await stripe.subscriptions.update(
-        profile.stripeSubscriptionId,
-        {
-          items: [
-            {
-              id: subscriptionItemId,
-              price: priceId,
-            },
-          ],
-          proration_behavior: "create_prorations",
-          metadata: { userId, tier: newTier },
-        }
-      );
+      // Upgrade: immediate change with proration charged now (not at next renewal)
+      // Use subscription_items.update with proration_date to ensure correct proration calc
+      const prorationDate = Math.floor(Date.now() / 1000);
+      await stripe.subscriptionItems.update(subscriptionItemId, {
+        price: priceId,
+        proration_behavior: "always_invoice",
+        proration_date: prorationDate,
+        payment_behavior: "error_if_incomplete",
+      });
 
+      const updated = await stripe.subscriptions.retrieve(
+        profile.stripeSubscriptionId,
+        { expand: ["items.data.price"] }
+      );
       const updatedPriceId =
         typeof updated.items.data[0]?.price?.id === "string"
           ? updated.items.data[0].price.id
@@ -120,6 +119,8 @@ export async function POST(req: NextRequest) {
         stripeSubscriptionStatus: updated.status,
         stripePriceId: updatedPriceId,
         subscriptionTier: newTier,
+        tierUpgradeAt: new Date().toISOString(),
+        tierBeforeUpgrade: currentTier ?? undefined,
       });
 
       return NextResponse.json({

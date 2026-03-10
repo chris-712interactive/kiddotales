@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
           stripeSubscriptionStatus: "canceled",
           stripePriceId: null,
           subscriptionTier: "free",
+          tierUpgradeAt: null,
+          tierBeforeUpgrade: null,
         });
         break;
       }
@@ -131,6 +133,8 @@ export async function POST(req: NextRequest) {
           subscriptionTier: activeStatuses.includes(sub.status)
             ? (tier ?? "spark")
             : "free",
+          tierUpgradeAt: null,
+          tierBeforeUpgrade: null,
         });
         break;
       }

@@ -1,5 +1,5 @@
 import { createSupabaseAdmin } from "./supabase";
-import { getBookLimitForTier, type BookLimitPeriod } from "./stripe";
+import { getBookLimitForTier, getStripe, type BookLimitPeriod } from "./stripe";
 import type { BookData, CreationMetadata, ChildProfile } from "@/types";
 
 /** @deprecated Use getBookLimitForUser with tier instead */
@@ -18,6 +18,8 @@ export type UserProfile = {
   stripePriceId?: string | null;
   parentConsentAt?: string | null;
   parentConsentVersion?: string | null;
+  tierUpgradeAt?: string | null;
+  tierBeforeUpgrade?: string | null;
   createdAt: string;
   updatedAt: string | null;
 };
@@ -36,7 +38,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, parent_consent_at, parent_consent_version, created_at, updated_at")
+    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, parent_consent_at, parent_consent_version, tier_upgrade_at, tier_before_upgrade, created_at, updated_at")
     .eq("id", userId)
     .single();
 
@@ -56,30 +58,125 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     stripePriceId: data.stripe_price_id ?? null,
     parentConsentAt: data.parent_consent_at ?? null,
     parentConsentVersion: data.parent_consent_version ?? null,
+    tierUpgradeAt: data.tier_upgrade_at ?? null,
+    tierBeforeUpgrade: data.tier_before_upgrade ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at ?? null,
   };
 }
 
-/** Get book creation limit and period for user based on subscription tier. */
+/** Get book creation limit and period for user based on subscription tier.
+ * When user upgraded mid-cycle, prorates the book limit increase (ceil). */
 export async function getBookLimitForUser(userId: string): Promise<{
   limit: number;
   period: BookLimitPeriod;
 }> {
   const profile = await getUserProfile(userId);
   const tier = profile?.subscriptionTier ?? "free";
-  return getBookLimitForTier(tier);
+  const base = getBookLimitForTier(tier);
+
+  // Prorate book limit when user upgraded mid-cycle
+  const upgradeAt = profile?.tierUpgradeAt;
+  const beforeTier = profile?.tierBeforeUpgrade;
+  if (
+    upgradeAt &&
+    beforeTier &&
+    profile?.stripeSubscriptionId &&
+    base.period === "monthly"
+  ) {
+    const stripe = getStripe();
+    if (stripe) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(
+          profile.stripeSubscriptionId,
+          { expand: ["items.data"] }
+        );
+        const item = sub.items?.data?.[0];
+        const periodStart = item?.current_period_start;
+        const periodEnd = item?.current_period_end;
+        if (
+          typeof periodStart === "number" &&
+          typeof periodEnd === "number"
+        ) {
+          const upgradeTs = new Date(upgradeAt).getTime() / 1000;
+          if (upgradeTs >= periodStart && upgradeTs < periodEnd) {
+            const oldLimit = getBookLimitForTier(beforeTier).limit;
+            const newLimit = base.limit;
+            const diff = newLimit - oldLimit;
+            if (diff > 0) {
+              const daysLeft = periodEnd - upgradeTs;
+              const daysTotal = periodEnd - periodStart;
+              const proratedIncrease = Math.ceil(
+                (daysLeft / daysTotal) * diff
+              );
+              return {
+                limit: oldLimit + proratedIncrease,
+                period: base.period,
+              };
+            }
+          }
+        }
+      } catch {
+        // Fall back to full tier limit on Stripe errors
+      }
+    }
+  }
+
+  return base;
 }
 
-/** Get book usage (creations) for user by period. Deletions do not reduce this. */
+/** Get book usage (creations) for user by period. Deletions do not reduce this.
+ * For "monthly" with a subscription, uses Stripe billing period; otherwise calendar month. */
 export async function getUserBookCountByPeriod(
   userId: string,
   period: BookLimitPeriod
 ): Promise<number> {
   const supabase = createSupabaseAdmin();
-  const now = new Date();
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  let start: Date;
+  let end: Date;
+
+  if (period === "monthly") {
+    const now = new Date();
+    const calendarStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const calendarEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    const profile = await getUserProfile(userId);
+    if (profile?.stripeSubscriptionId) {
+      const stripe = getStripe();
+      if (stripe) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(
+            profile.stripeSubscriptionId,
+            { expand: ["items.data"] }
+          );
+          const periodStart = sub.items?.data?.[0]?.current_period_start;
+          const periodEnd = sub.items?.data?.[0]?.current_period_end;
+          if (
+            typeof periodStart === "number" &&
+            typeof periodEnd === "number"
+          ) {
+            start = new Date(periodStart * 1000);
+            end = new Date(periodEnd * 1000);
+          } else {
+            start = calendarStart;
+            end = calendarEnd;
+          }
+        } catch {
+          start = calendarStart;
+          end = calendarEnd;
+        }
+      } else {
+        start = calendarStart;
+        end = calendarEnd;
+      }
+    } else {
+      start = calendarStart;
+      end = calendarEnd;
+    }
+  } else {
+    start = new Date(0);
+    end = new Date(8640000000000000); // far future for "total"
+  }
 
   let query = supabase
     .from("user_book_usage_events")
@@ -88,13 +185,102 @@ export async function getUserBookCountByPeriod(
 
   if (period === "monthly") {
     query = query
-      .gte("created_at", startOfMonth.toISOString())
-      .lt("created_at", startOfNextMonth.toISOString());
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString());
   }
 
   const { count, error } = await query;
   if (error) return 0;
   return count ?? 0;
+}
+
+/** Get voice usage count for user within period. Uses subscription billing period for paid tiers. */
+export async function getUserVoiceCountByPeriod(
+  userId: string,
+  period: BookLimitPeriod
+): Promise<number> {
+  const supabase = createSupabaseAdmin();
+  let start: Date;
+  let end: Date;
+
+  if (period === "monthly") {
+    const now = new Date();
+    const calendarStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const calendarEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    const profile = await getUserProfile(userId);
+    if (profile?.stripeSubscriptionId) {
+      const stripe = getStripe();
+      if (stripe) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(
+            profile.stripeSubscriptionId,
+            { expand: ["items.data"] }
+          );
+          const periodStart = sub.items?.data?.[0]?.current_period_start;
+          const periodEnd = sub.items?.data?.[0]?.current_period_end;
+          if (
+            typeof periodStart === "number" &&
+            typeof periodEnd === "number"
+          ) {
+            start = new Date(periodStart * 1000);
+            end = new Date(periodEnd * 1000);
+          } else {
+            start = calendarStart;
+            end = calendarEnd;
+          }
+        } catch {
+          start = calendarStart;
+          end = calendarEnd;
+        }
+      } else {
+        start = calendarStart;
+        end = calendarEnd;
+      }
+    } else {
+      start = calendarStart;
+      end = calendarEnd;
+    }
+  } else {
+    start = new Date(0);
+    end = new Date(8640000000000000);
+  }
+
+  const { count, error } = await supabase
+    .from("user_voice_usage_events")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", start.toISOString())
+    .lt("created_at", end.toISOString());
+
+  if (error) return 0;
+  return count ?? 0;
+}
+
+/** Check if a book has already used a voice slot (has any voice usage event). */
+export async function hasBookUsedVoiceSlot(bookId: string): Promise<boolean> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("user_voice_usage_events")
+    .select("id")
+    .eq("book_id", bookId)
+    .limit(1)
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
+}
+
+/** Record a voice usage event when a book first gets AI voice. */
+export async function insertVoiceUsageEvent(
+  userId: string,
+  bookId: string
+): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase.from("user_voice_usage_events").insert({
+    user_id: userId,
+    book_id: bookId,
+    created_at: new Date().toISOString(),
+  });
 }
 
 /** Record a book creation usage event (transaction log). */
@@ -126,6 +312,8 @@ export async function updateSubscriptionFromStripe(
     stripeSubscriptionStatus?: string | null;
     stripePriceId?: string | null;
     subscriptionTier?: string;
+    tierUpgradeAt?: string | null;
+    tierBeforeUpgrade?: string | null;
   }
 ): Promise<void> {
   const supabase = createSupabaseAdmin();
@@ -135,6 +323,8 @@ export async function updateSubscriptionFromStripe(
   if (data.stripeSubscriptionStatus !== undefined) payload.stripe_subscription_status = data.stripeSubscriptionStatus;
   if (data.stripePriceId !== undefined) payload.stripe_price_id = data.stripePriceId;
   if (data.subscriptionTier !== undefined) payload.subscription_tier = data.subscriptionTier;
+  if (data.tierUpgradeAt !== undefined) payload.tier_upgrade_at = data.tierUpgradeAt;
+  if (data.tierBeforeUpgrade !== undefined) payload.tier_before_upgrade = data.tierBeforeUpgrade;
   await supabase.from("users").update(payload).eq("id", userId);
 }
 
@@ -239,6 +429,35 @@ export async function updateUserLastLogin(userId: string): Promise<void> {
     .from("users")
     .update({ last_login_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", userId);
+}
+
+/** Update book pages with audio URLs. Merges audioUrl and audioVoice into specified pages. */
+export async function updateBookPagesWithAudio(
+  bookId: string,
+  userId: string,
+  updates: { pageIndex: number; audioUrl: string; audioVoice: string }[]
+): Promise<boolean> {
+  const book = await getBookById(bookId, userId);
+  if (!book?.pages?.length) return false;
+
+  const pages = [...book.pages];
+  for (const { pageIndex, audioUrl, audioVoice } of updates) {
+    if (pageIndex >= 0 && pageIndex < pages.length) {
+      pages[pageIndex] = {
+        ...pages[pageIndex],
+        audioUrl,
+        audioVoice,
+      };
+    }
+  }
+
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("books")
+    .update({ pages, updated_at: new Date().toISOString() })
+    .eq("id", bookId)
+    .eq("user_id", userId);
+  return !error;
 }
 
 /** Get book by ID. Optionally restrict to userId for auth. */

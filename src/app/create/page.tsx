@@ -14,6 +14,9 @@ import {
   ArrowLeft,
   Plus,
   X,
+  Volume2,
+  Play,
+  Pause,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +41,7 @@ import {
   type ChildProfile,
 } from "@/types";
 import { ParentalConsentModal } from "@/components/parental-consent-modal";
+import { TTS_VOICE_LABELS, TTS_DEFAULT_VOICE } from "@/lib/stripe";
 
 const ART_STYLE_CARDS = [
   {
@@ -126,7 +130,13 @@ function CreatePageContent() {
     lifeLesson: "kindness",
     artStyle: "whimsical-watercolor",
     appearance: {},
+    preferredVoice: TTS_DEFAULT_VOICE,
   });
+
+  const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
+  const [voiceOptions, setVoiceOptions] = useState<string[]>([]);
+  const [playingSample, setPlayingSample] = useState<string | null>(null);
+  const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [customInterest, setCustomInterest] = useState("");
   const [customPronoun, setCustomPronoun] = useState("");
@@ -143,6 +153,7 @@ function CreatePageContent() {
         lifeLesson: "kindness",
         artStyle: "whimsical-watercolor",
         appearance: {},
+        preferredVoice: form.preferredVoice ?? TTS_DEFAULT_VOICE,
       });
       return;
     }
@@ -313,6 +324,21 @@ function CreatePageContent() {
         router.replace("/create");
       });
   }, [searchParams, status, router]);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/user/settings")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.subscriptionTier) setSubscriptionTier(data.subscriptionTier);
+          if (Array.isArray(data?.voiceOptions)) setVoiceOptions(data.voiceOptions);
+        })
+        .catch(() => {});
+    } else {
+      setSubscriptionTier("free");
+      setVoiceOptions([]);
+    }
+  }, [status]);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) {
@@ -850,6 +876,100 @@ function CreatePageContent() {
                 ))}
               </div>
             </div>
+
+            {/* Storyteller voice (Spark+ only) */}
+            {voiceOptions.length > 0 && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Volume2 className="size-4" />
+                  Storyteller voice
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Choose the AI voice that will read your story aloud. You have a limited number of AI voice books per month.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* No AI voice option - saves voice slot */}
+                  <Card
+                    className={cn(
+                      "cursor-pointer transition-all",
+                      (form.preferredVoice ?? TTS_DEFAULT_VOICE) === "none"
+                        ? "ring-2 ring-primary"
+                        : "hover:border-primary/50"
+                    )}
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, preferredVoice: "none" }))
+                    }
+                  >
+                    <CardContent className="flex items-center p-3">
+                      <span className="font-medium">
+                        No AI voice (browser voice only)
+                      </span>
+                    </CardContent>
+                  </Card>
+                  {voiceOptions.map((voiceId) => (
+                    <Card
+                      key={voiceId}
+                      className={cn(
+                        "cursor-pointer transition-all",
+                        (form.preferredVoice ?? TTS_DEFAULT_VOICE) === voiceId
+                          ? "ring-2 ring-primary"
+                          : "hover:border-primary/50"
+                      )}
+                      onClick={() =>
+                        setForm((prev) => ({ ...prev, preferredVoice: voiceId }))
+                      }
+                    >
+                      <CardContent className="flex items-center justify-between p-3">
+                        <span className="font-medium">
+                          {TTS_VOICE_LABELS[voiceId] ?? voiceId}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (playingSample === voiceId) {
+                              sampleAudioRef.current?.pause();
+                              sampleAudioRef.current = null;
+                              setPlayingSample(null);
+                              return;
+                            }
+                            const audio = new Audio(`/voice-samples/${voiceId}.mp3`);
+                            sampleAudioRef.current = audio;
+                            setPlayingSample(voiceId);
+                            audio.play();
+                            audio.onended = () => {
+                              setPlayingSample(null);
+                              sampleAudioRef.current = null;
+                            };
+                          }}
+                        >
+                          {playingSample === voiceId ? (
+                            <Pause className="size-4" />
+                          ) : (
+                            <Play className="size-4" />
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Free tier teaser */}
+            {status === "authenticated" && voiceOptions.length === 0 && (
+              <div className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+                <p className="text-sm text-muted-foreground">
+                  <Link href="/pricing" className="font-medium text-primary underline hover:no-underline">
+                    Upgrade to Spark
+                  </Link>
+                  {" "}to unlock AI voice read-aloud for your stories.
+                </p>
+              </div>
+            )}
 
             {/* Surprise me */}
             <Button

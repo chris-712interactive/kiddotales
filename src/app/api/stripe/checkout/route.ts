@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getStripe } from "@/lib/stripe";
 import { getTierFromPriceId } from "@/lib/stripe";
-import {
-  ensureUser,
-  getUserProfile,
-  updateSubscriptionFromStripe,
-} from "@/lib/db";
+import { ensureUser, getUserProfile } from "@/lib/db";
 
 /** Create Stripe Checkout Session for subscription (server-side, secure). */
 export async function POST(req: NextRequest) {
@@ -56,18 +52,79 @@ export async function POST(req: NextRequest) {
     await ensureUser(userId, userEmail);
     const profile = await getUserProfile(userId);
 
-    // User already has a subscription - they must use change-plan or portal, not new checkout
+    // User already has a subscription in our DB - use change-plan, not new checkout
     if (profile?.stripeSubscriptionId) {
       return NextResponse.json(
         {
           error:
-            "You already have an active subscription. Use 'Manage subscription' to change your plan, or use the change-plan API.",
+            "You already have an active subscription. Use 'Manage subscription' to change your plan.",
         },
         { status: 400 }
       );
     }
 
-    const stripeCustomerId = profile?.stripeCustomerId ?? undefined;
+    // Also check Stripe directly - user may have active subscriptions we don't know about
+    // (e.g. webhook not fired yet, or created multiple in parallel)
+    let stripeCustomerId = profile?.stripeCustomerId ?? undefined;
+
+    if (stripeCustomerId) {
+      const existingSubs = await stripe.subscriptions.list({
+        customer: stripeCustomerId,
+        status: "active",
+        limit: 1,
+      });
+      if (existingSubs.data.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "You already have an active subscription. Use 'Manage subscription' in Settings to change your plan.",
+          },
+          { status: 400 }
+        );
+      }
+      // Also check trialing
+      const trialingSubs = await stripe.subscriptions.list({
+        customer: stripeCustomerId,
+        status: "trialing",
+        limit: 1,
+      });
+      if (trialingSubs.data.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "You already have an active subscription. Use 'Manage subscription' in Settings to change your plan.",
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      // No customer in our DB - check if Stripe has a customer with this email and active sub
+      const customers = await stripe.customers.list({
+        email: userEmail,
+        limit: 1,
+      });
+      if (customers.data.length > 0) {
+        const customer = customers.data[0];
+        stripeCustomerId = customer.id; // Use existing customer for checkout
+        const existingSubs = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: "all",
+          limit: 10,
+        });
+        const hasActive = existingSubs.data.some(
+          (s) => s.status === "active" || s.status === "trialing"
+        );
+        if (hasActive) {
+          return NextResponse.json(
+            {
+              error:
+                "You already have an active subscription. Use 'Manage subscription' in Settings to change your plan.",
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
     const successUrl = `${baseUrl}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`;

@@ -13,11 +13,20 @@ import {
   getUserProfile,
   getUserBookCountByPeriod,
   insertBookUsageEvent,
+  insertVoiceUsageEvent,
   saveBookToSupabase,
   replaceBook,
   getBookLimitForUser,
+  getUserVoiceCountByPeriod,
+  hasBookUsedVoiceSlot,
+  updateBookPagesWithAudio,
 } from "@/lib/db";
-import { uploadImageToStorage } from "@/lib/supabase-storage";
+import {
+  getVoiceLimitForTier,
+  getVoicesForTier,
+  TTS_DEFAULT_VOICE,
+} from "@/lib/stripe";
+import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -386,7 +395,7 @@ export async function POST(request: NextRequest) {
           lifeLesson: lifeLesson || "kindness",
           artStyle: artStyle || "whimsical-watercolor",
           appearance: appearance || {},
-          preferredVoice: preferredVoice || undefined,
+          preferredVoice: preferredVoice && preferredVoice !== "none" ? preferredVoice : "none",
         };
 
         if (updateBookId) {
@@ -398,6 +407,93 @@ export async function POST(request: NextRequest) {
         await insertBookUsageEvent(userId, bookId);
 
         book = { ...book, creationMetadata };
+
+        // Generate AI voice for all 8 interior pages when user selected an AI voice
+        const wantsAiVoice =
+          preferredVoice &&
+          preferredVoice !== "none" &&
+          process.env.OPENAI_API_KEY;
+        if (wantsAiVoice) {
+          console.log("[KiddoTales] Starting AI voice generation, preferredVoice:", preferredVoice);
+          try {
+            const profile = await getUserProfile(userId);
+            const tier = profile?.subscriptionTier ?? "free";
+            if (tier === "free") {
+              console.log("[KiddoTales] Skipping AI voice: user tier is free");
+            } else {
+              const voiceLimit = getVoiceLimitForTier(tier);
+              const allowedVoices = getVoicesForTier(tier);
+              const voice = allowedVoices.includes(preferredVoice)
+                ? preferredVoice
+                : allowedVoices[0] ?? TTS_DEFAULT_VOICE;
+              const { period } = await getBookLimitForUser(userId);
+              const voiceCount = await getUserVoiceCountByPeriod(userId, period);
+              const alreadyUsed = await hasBookUsedVoiceSlot(bookId);
+
+              if (!alreadyUsed && voiceCount >= voiceLimit) {
+                console.log("[KiddoTales] Skipping AI voice: limit reached", {
+                  voiceCount,
+                  voiceLimit,
+                  period,
+                });
+              } else {
+                const pagePromises = book.pages.map(
+                  async (page, pageIndex) => {
+                    const text = page?.text?.trim();
+                    if (!text) return null;
+                    try {
+                      const response = await openai.audio.speech.create({
+                        model: "tts-1",
+                        voice: voice as "alloy" | "ash" | "coral" | "echo" | "fable" | "nova" | "onyx" | "sage" | "shimmer",
+                        input: text.slice(0, 4096),
+                      });
+                      const arrayBuffer = await response.arrayBuffer();
+                      const buffer = Buffer.from(arrayBuffer);
+                      const path = `books/${bookId}/audio/page-${pageIndex}.mp3`;
+                      const audioUrl = await uploadAudioToStorage(buffer, path);
+                      if (!audioUrl) {
+                        console.error("[KiddoTales] Audio upload failed for page", pageIndex);
+                        return null;
+                      }
+                      return { pageIndex, audioUrl, audioVoice: voice };
+                    } catch (err) {
+                      console.error("[KiddoTales] TTS failed for page", pageIndex, err);
+                      return null;
+                    }
+                  }
+                );
+                const results = await Promise.all(pagePromises);
+                const updates = results.filter(
+                  (r): r is { pageIndex: number; audioUrl: string; audioVoice: string } =>
+                    r !== null
+                );
+
+                if (updates.length > 0) {
+                  const updated = await updateBookPagesWithAudio(bookId, userId, updates);
+                  if (!updated) {
+                    console.error("[KiddoTales] updateBookPagesWithAudio failed - audio files uploaded but DB not updated");
+                  } else if (!alreadyUsed) {
+                    await insertVoiceUsageEvent(userId, bookId);
+                  }
+                  // Always merge into response so client gets audio (files are in storage)
+                  book = {
+                    ...book,
+                    pages: book.pages.map((p, i) => {
+                      const u = updates.find((x) => x.pageIndex === i);
+                      return u ? { ...p, audioUrl: u.audioUrl, audioVoice: u.audioVoice } : p;
+                    }),
+                  };
+                  console.log("[KiddoTales] AI voice generated for", updates.length, "pages");
+                } else {
+                  console.error("[KiddoTales] No audio updates produced (all pages failed?)");
+                }
+              }
+            }
+          } catch (voiceErr) {
+            console.error("[KiddoTales] AI voice generation error:", voiceErr);
+            // Don't fail the whole creation; book is saved, voice can be generated later
+          }
+        }
       } catch (dbErr) {
         console.error("[KiddoTales] Supabase save error:", dbErr);
       }

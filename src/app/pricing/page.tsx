@@ -15,7 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AuthButtons } from "@/components/auth-buttons";
-import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
+import { UpgradeConfirmModal } from "@/components/upgrade-confirm-modal";
+import { SUBSCRIPTION_TIERS, getTierRank } from "@/lib/stripe";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -32,25 +33,77 @@ export default function PricingPage() {
   const { data: session, status } = useSession();
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<string | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [upgradeModal, setUpgradeModal] = useState<{
+    priceId: string;
+    tierName: string;
+    amountFormatted: string;
+  } | null>(null);
+  const [upgradeConfirmLoading, setUpgradeConfirmLoading] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated") {
+      setSubscriptionLoading(true);
       fetch("/api/user/settings")
         .then((r) => (r.ok ? r.json() : null))
-        .then((res) => res && setCurrentTier(res.subscriptionTier ?? "free"))
-        .catch(() => {});
+        .then((res) => {
+          setCurrentTier(res?.subscriptionTier ?? "free");
+        })
+        .catch(() => {
+          setCurrentTier("free");
+        })
+        .finally(() => setSubscriptionLoading(false));
     } else {
       setCurrentTier(null);
+      setSubscriptionLoading(false);
     }
   }, [status]);
 
-  const handleSubscribe = async (priceId: string) => {
+  const handleSubscribe = async (priceId: string, tierId?: string) => {
     if (status !== "authenticated") {
       router.push(`/sign-in?callbackUrl=/pricing`);
       return;
     }
+    if (subscriptionLoading) return;
     setLoadingPriceId(priceId);
     try {
+      // Existing subscribers: upgrade shows modal, downgrade goes straight to change-plan
+      if (currentTier && currentTier !== "free" && tierId) {
+        const newTierRank = getTierRank(tierId);
+        const currentTierRank = getTierRank(currentTier);
+
+        if (newTierRank > currentTierRank) {
+          // Upgrade: fetch preview and show modal
+          const previewRes = await fetch("/api/stripe/preview-upgrade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ priceId }),
+          });
+          const previewData = await previewRes.json();
+          if (!previewRes.ok) throw new Error(previewData.error || "Failed to preview");
+          const tierConfig = SUBSCRIPTION_TIERS[tierId as keyof typeof SUBSCRIPTION_TIERS];
+          setUpgradeModal({
+            priceId,
+            tierName: tierConfig?.name ?? tierId,
+            amountFormatted: previewData.amountFormatted ?? "$0.00",
+          });
+          return;
+        }
+
+        // Downgrade: no modal, apply immediately
+        const res = await fetch("/api/stripe/change-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priceId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to change plan");
+        toast.success(data.message ?? "Plan updated.");
+        if (!data.effectiveAt) setCurrentTier(data.tier ?? currentTier);
+        return;
+      }
+
+      // New subscribers: use checkout
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,6 +117,27 @@ export default function PricingPage() {
       toast.error(err instanceof Error ? err.message : "Checkout failed");
     } finally {
       setLoadingPriceId(null);
+    }
+  };
+
+  const handleUpgradeConfirm = async () => {
+    if (!upgradeModal) return;
+    setUpgradeConfirmLoading(true);
+    try {
+      const res = await fetch("/api/stripe/change-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceId: upgradeModal.priceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to change plan");
+      toast.success(data.message ?? "Plan upgraded.");
+      setCurrentTier(data.tier ?? currentTier);
+      setUpgradeModal(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upgrade");
+    } finally {
+      setUpgradeConfirmLoading(false);
     }
   };
 
@@ -197,12 +271,18 @@ export default function PricingPage() {
                     <div className="mt-6 space-y-2">
                       <Button
                         className="w-full"
-                        disabled={!!loadingPriceId || currentTier === tier.id}
+                        disabled={
+                          subscriptionLoading ||
+                          !!loadingPriceId ||
+                          currentTier === tier.id
+                        }
                         onClick={() =>
-                          handleSubscribe(priceIdMonthly || priceIdYearly!)
+                          handleSubscribe(priceIdMonthly || priceIdYearly!, tier.id)
                         }
                       >
                         {loadingPriceId === (priceIdMonthly || priceIdYearly) ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : subscriptionLoading ? (
                           <Loader2 className="size-4 animate-spin" />
                         ) : (
                           "Subscribe monthly"
@@ -212,10 +292,16 @@ export default function PricingPage() {
                         <Button
                           variant="outline"
                           className="w-full"
-                          disabled={!!loadingPriceId || currentTier === tier.id}
-                          onClick={() => handleSubscribe(priceIdYearly)}
+                          disabled={
+                            subscriptionLoading ||
+                            !!loadingPriceId ||
+                            currentTier === tier.id
+                          }
+                          onClick={() => handleSubscribe(priceIdYearly, tier.id)}
                         >
                           {loadingPriceId === priceIdYearly ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : subscriptionLoading ? (
                             <Loader2 className="size-4 animate-spin" />
                           ) : (
                             "Subscribe yearly"
@@ -227,7 +313,7 @@ export default function PricingPage() {
                     <Button
                       className="mt-6 w-full"
                       variant="outline"
-                      disabled={currentTier === tier.id}
+                      disabled={subscriptionLoading || currentTier === tier.id}
                       onClick={() =>
                         toast.error("Stripe prices not configured. Add price IDs to .env")
                       }
@@ -248,6 +334,17 @@ export default function PricingPage() {
         <p className="mt-8 text-center text-sm text-muted-foreground">
           Secure checkout powered by Stripe. Cancel anytime.
         </p>
+
+        {upgradeModal && (
+          <UpgradeConfirmModal
+            isOpen={!!upgradeModal}
+            onClose={() => setUpgradeModal(null)}
+            tierName={upgradeModal.tierName}
+            amountFormatted={upgradeModal.amountFormatted}
+            onConfirm={handleUpgradeConfirm}
+            isLoading={upgradeConfirmLoading}
+          />
+        )}
       </main>
     </div>
   );

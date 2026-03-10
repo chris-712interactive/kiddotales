@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,6 +15,7 @@ import {
   RectangleVertical,
   RectangleHorizontal,
   Pencil,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,6 +34,8 @@ function BookViewerContent() {
   const [currentPage, setCurrentPage] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [speakingPage, setSpeakingPage] = useState<number | null>(null);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
@@ -223,30 +226,115 @@ function BookViewerContent() {
   }, [searchParams]);
 
   const handleReadAloud = useCallback(
-    (pageIndex: number) => {
+    async (pageIndex: number) => {
       if (!book) return;
 
-      if (speakingPage === pageIndex) {
+      if (speakingPage === pageIndex || audioLoading) {
         window.speechSynthesis?.cancel();
+        audioRef.current?.pause();
         setSpeakingPage(null);
         return;
       }
 
+      const page = book.pages[pageIndex];
+      const text = page?.text?.trim();
+      if (!text) return;
+
+      const isPaidTier = subscriptionTier && subscriptionTier !== "free";
+      const hasCachedAudio = page?.audioUrl;
+
+      if (hasCachedAudio) {
+        window.speechSynthesis?.cancel();
+        const audio = new Audio(page.audioUrl);
+        audioRef.current = audio;
+        setSpeakingPage(pageIndex);
+        audio.onended = () => setSpeakingPage(null);
+        audio.onerror = () => {
+          setSpeakingPage(null);
+          toast.error("Could not play audio.");
+        };
+        audio.play().catch(() => {
+          setSpeakingPage(null);
+          toast.error("Could not play audio.");
+        });
+        return;
+      }
+
+      const wantsAiVoice = book.creationMetadata?.preferredVoice &&
+        book.creationMetadata.preferredVoice !== "none";
+
+      if (book.id && isPaidTier && wantsAiVoice) {
+        setAudioLoading(true);
+        try {
+          const res = await fetch(`/api/books/${book.id}/audio`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pageIndices: [pageIndex] }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (res.status === 403) {
+              toast.error(data.error ?? "AI voice limit reached this month.");
+            } else {
+              toast.error(data.error ?? "Failed to generate audio.");
+            }
+            throw new Error(data.error);
+          }
+          const audioUrl = data.audioUrls?.[pageIndex];
+          if (audioUrl) {
+            setBook((prev) => {
+              if (!prev) return prev;
+              const pages = [...prev.pages];
+              if (pages[pageIndex]) {
+                pages[pageIndex] = {
+                  ...pages[pageIndex],
+                  audioUrl,
+                  audioVoice: data.voice,
+                };
+              }
+              return { ...prev, pages };
+            });
+            window.speechSynthesis?.cancel();
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+            setSpeakingPage(pageIndex);
+            audio.onended = () => setSpeakingPage(null);
+            audio.onerror = () => setSpeakingPage(null);
+            audio.play().catch(() => setSpeakingPage(null));
+          }
+        } catch {
+          // Fall back to browser TTS
+          window.speechSynthesis?.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 0.9;
+          utterance.pitch = 1.1;
+          const voices = window.speechSynthesis.getVoices();
+          const kidVoice = voices.find((v) => v.name.includes("Child") || v.name.includes("Samantha"));
+          if (kidVoice) utterance.voice = kidVoice;
+          utterance.onend = () => setSpeakingPage(null);
+          utterance.onerror = () => setSpeakingPage(null);
+          window.speechSynthesis.speak(utterance);
+          setSpeakingPage(pageIndex);
+        } finally {
+          setAudioLoading(false);
+        }
+        return;
+      }
+
+      // Fallback: browser SpeechSynthesis
       window.speechSynthesis?.cancel();
-      const utterance = new SpeechSynthesisUtterance(book.pages[pageIndex].text);
+      const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.9;
       utterance.pitch = 1.1;
       const voices = window.speechSynthesis.getVoices();
       const kidVoice = voices.find((v) => v.name.includes("Child") || v.name.includes("Samantha"));
       if (kidVoice) utterance.voice = kidVoice;
-
       utterance.onend = () => setSpeakingPage(null);
       utterance.onerror = () => setSpeakingPage(null);
-
       window.speechSynthesis.speak(utterance);
       setSpeakingPage(pageIndex);
     },
-    [book, speakingPage]
+    [book, speakingPage, audioLoading, subscriptionTier]
   );
 
   const handleDownloadPDF = useCallback(
@@ -428,11 +516,21 @@ function BookViewerContent() {
                   size="sm"
                   className="mt-4"
                   onClick={() => handleReadAloud(currentPage)}
+                  disabled={audioLoading}
                 >
-                  <Volume2
-                    className={`mr-2 size-4 ${speakingPage === currentPage ? "text-primary" : ""}`}
-                  />
-                  {speakingPage === currentPage ? "Stop" : "Read aloud"}
+                  {audioLoading ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <Volume2
+                        className={`mr-2 size-4 ${speakingPage === currentPage ? "text-primary" : ""}`}
+                      />
+                      {speakingPage === currentPage ? "Stop" : "Read aloud"}
+                    </>
+                  )}
                 </Button>
               </motion.div>
             </AnimatePresence>

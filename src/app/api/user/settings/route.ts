@@ -5,9 +5,10 @@ import {
   getUserProfile,
   updateUserProfile,
   getUserBookCountByPeriod,
+  getUserVoiceCountByPeriod,
   getBookLimitForUser,
 } from "@/lib/db";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, getVoiceLimitForTier, getVoicesForTier } from "@/lib/stripe";
 
 export async function GET() {
   const session = await auth();
@@ -30,7 +31,13 @@ export async function GET() {
       );
     }
 
-    const bookCount = await getUserBookCountByPeriod(userId, limitConfig.period);
+    const [bookCount, voiceCount] = await Promise.all([
+      getUserBookCountByPeriod(userId, limitConfig.period),
+      getUserVoiceCountByPeriod(userId, limitConfig.period),
+    ]);
+
+    const voiceLimit = getVoiceLimitForTier(profile.subscriptionTier);
+    const voiceOptions = getVoicesForTier(profile.subscriptionTier);
 
     let nextBillingDate: string | null = null;
     let subscriptionStatus: string | null = null;
@@ -65,6 +72,9 @@ export async function GET() {
       bookCount,
       bookLimit: limitConfig.limit,
       bookLimitPeriod: limitConfig.period,
+      voiceCount,
+      voiceLimit,
+      voiceOptions,
       subscriptionTier: profile.subscriptionTier,
       theme: profile.theme,
       nextBillingDate,

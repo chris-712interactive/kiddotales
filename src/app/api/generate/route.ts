@@ -109,7 +109,8 @@ export async function POST(request: NextRequest) {
       lifeLesson,
       artStyle,
       appearance,
-    } = body as { updateBookId?: string; appearance?: CharacterAppearance } & typeof body;
+      preferredVoice,
+    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string } & typeof body;
 
     if (!childName || !interests?.length) {
       return NextResponse.json(
@@ -385,6 +386,7 @@ export async function POST(request: NextRequest) {
           lifeLesson: lifeLesson || "kindness",
           artStyle: artStyle || "whimsical-watercolor",
           appearance: appearance || {},
+          preferredVoice: preferredVoice || undefined,
         };
 
         if (updateBookId) {

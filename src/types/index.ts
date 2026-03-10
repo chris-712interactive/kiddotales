@@ -10,6 +10,10 @@ export interface BookPage {
   imageUrl?: string;
   /** Base64 data URL for persistent storage (survives Replicate URL expiry) */
   imageData?: string;
+  /** AI-generated audio URL for read-aloud */
+  audioUrl?: string;
+  /** Voice ID used when audio was generated */
+  audioVoice?: string;
 }
 
 export interface BookData {
@@ -44,6 +48,8 @@ export interface CreateFormData {
   artStyle: string;
   /** Optional appearance overrides for the main character */
   appearance?: CharacterAppearance;
+  /** AI voice for read-aloud (Spark: default, Magic: 3 options, Legend: all) */
+  preferredVoice?: string;
 }
 
 /** Stored with each book for correction flow */

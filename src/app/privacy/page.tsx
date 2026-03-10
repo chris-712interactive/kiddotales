@@ -80,7 +80,7 @@ export default function PrivacyPage() {
               To provide our service, we share child information with:
             </p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li><strong>OpenAI</strong> – to generate story text. Child name, age, interests, and appearance are sent to OpenAI. See <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">OpenAI&apos;s Privacy Policy</a>.</li>
+              <li><strong>OpenAI</strong> – to generate story text and AI voice narration (text-to-speech). Child name, age, interests, and appearance are sent to OpenAI. See <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">OpenAI&apos;s Privacy Policy</a>.</li>
               <li><strong>Replicate</strong> – to generate story illustrations. See <a href="https://replicate.com/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Replicate&apos;s Terms</a>.</li>
               <li><strong>Supabase</strong> – to store your books and account data securely.</li>
               <li><strong>Google</strong> – for sign-in authentication.</li>

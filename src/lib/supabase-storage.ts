@@ -6,6 +6,7 @@ function getBookStoragePaths(bookId: string): string[] {
   const paths: string[] = [`books/${bookId}/cover.png`];
   for (let i = 0; i < 8; i++) {
     paths.push(`books/${bookId}/page-${i}.png`);
+    paths.push(`books/${bookId}/audio/page-${i}.mp3`);
   }
   return paths;
 }
@@ -38,6 +39,29 @@ export async function uploadImageToStorage(
     return urlData.publicUrl;
   } catch (err) {
     console.error("[KiddoTales] uploadImageToStorage error:", err);
+    return null;
+  }
+}
+
+/** Upload audio buffer to Supabase Storage. Returns public URL. */
+export async function uploadAudioToStorage(
+  buffer: Buffer,
+  path: string
+): Promise<string | null> {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { error } = await supabase.storage.from(BUCKET).upload(path, buffer, {
+      contentType: "audio/mpeg",
+      upsert: true,
+    });
+    if (error) {
+      console.error("[KiddoTales] Audio storage upload error:", error);
+      return null;
+    }
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error("[KiddoTales] uploadAudioToStorage error:", err);
     return null;
   }
 }

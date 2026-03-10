@@ -66,7 +66,7 @@ export function ParentalConsentModal({ onConsent, onDismiss }: Props) {
                   </ul>
                   <p className="mt-2 font-medium">Who receives it:</p>
                   <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-                    <li><strong>OpenAI</strong> – story generation (per their privacy policy)</li>
+                    <li><strong>OpenAI</strong> – story generation and AI voice narration (per their privacy policy)</li>
                     <li><strong>Replicate</strong> – image generation (per their terms)</li>
                     <li><strong>Supabase</strong> – secure storage</li>
                   </ul>

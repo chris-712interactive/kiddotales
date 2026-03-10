@@ -9,12 +9,12 @@ export const SUBSCRIPTION_TIERS = {
     name: "Free",
     bookLimit: 3,
     bookLimitPeriod: "total" as BookLimitPeriod,
+    voiceLimit: 0,
     priceMonthly: null,
     priceYearly: null,
     features: [
       "Up to 3 books total",
       "Basic generation",
-      "Watermarked images",
       "Limited art styles",
     ],
   },
@@ -23,6 +23,7 @@ export const SUBSCRIPTION_TIERS = {
     name: "Spark",
     bookLimit: 20,
     bookLimitPeriod: "monthly" as BookLimitPeriod,
+    voiceLimit: 5,
     priceMonthly: 4.99,
     priceYearly: 49,
     features: [
@@ -31,7 +32,8 @@ export const SUBSCRIPTION_TIERS = {
       "Full art styles",
       "Save last 10 books",
       "Basic PDF",
-      "Read-aloud",
+      "AI voice read-aloud",
+      "Edit Book"
     ],
     priceIdMonthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_SPARK_MONTHLY,
     priceIdYearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_SPARK_YEARLY,
@@ -41,6 +43,7 @@ export const SUBSCRIPTION_TIERS = {
     name: "Magic",
     bookLimit: 60,
     bookLimitPeriod: "monthly" as BookLimitPeriod,
+    voiceLimit: 10,
     priceMonthly: 9.99,
     priceYearly: 99,
     features: [
@@ -51,7 +54,7 @@ export const SUBSCRIPTION_TIERS = {
       "Regenerate single page",
       "Full history/journal (unlimited saves)",
       "Premium PDF layouts (cover + extras)",
-      "Early access to new styles/voices",
+      "3 voice options",
     ],
     priceIdMonthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_MAGIC_MONTHLY,
     priceIdYearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY,
@@ -61,6 +64,7 @@ export const SUBSCRIPTION_TIERS = {
     name: "Legend",
     bookLimit: 200,
     bookLimitPeriod: "monthly" as BookLimitPeriod,
+    voiceLimit: 15,
     priceMonthly: 14.99,
     priceYearly: 149,
     features: [
@@ -69,6 +73,7 @@ export const SUBSCRIPTION_TIERS = {
       "Multi-child profiles (up to 5 kids)",
       "Family sharing (invite 2 others)",
       "Custom lesson packs",
+      "All voice options",
       "Highest priority",
       "Commercial-use rights for teachers/daycares (limited)",
     ],
@@ -92,6 +97,18 @@ export function getBookLimitForTier(tier: string): {
   };
 }
 
+/** Tier rank for upgrade/downgrade comparison (higher = more expensive) */
+const TIER_RANK: Record<SubscriptionTierId, number> = {
+  free: 0,
+  spark: 1,
+  magic: 2,
+  legend: 3,
+};
+
+export function getTierRank(tier: string): number {
+  return TIER_RANK[tier as SubscriptionTierId] ?? 0;
+}
+
 /** Map Stripe price ID to tier */
 export function getTierFromPriceId(priceId: string): SubscriptionTierId | null {
   const priceMap: Record<string, SubscriptionTierId> = {};
@@ -109,4 +126,44 @@ export function getStripe(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;
   return new Stripe(key);
+}
+
+/** AI voice limits by tier (books with AI voice per month) */
+export function getVoiceLimitForTier(tier: string): number {
+  const t = SUBSCRIPTION_TIERS[tier as SubscriptionTierId];
+  const config = t ?? SUBSCRIPTION_TIERS.free;
+  return (config as { voiceLimit?: number }).voiceLimit ?? 0;
+}
+
+/** Default TTS voice (Spark's single voice) */
+export const TTS_DEFAULT_VOICE = "nova";
+
+/** Magic tier: 3 voice options */
+export const TTS_VOICES_MAGIC = ["nova", "alloy", "shimmer"] as const;
+
+/** Legend tier: all OpenAI TTS voices (tts-1 supports 9 voices only) */
+export const TTS_VOICES_LEGEND = [
+  "alloy", "ash", "coral", "echo", "fable",
+  "nova", "onyx", "sage", "shimmer",
+] as const;
+
+/** Human-readable labels for voice selector */
+export const TTS_VOICE_LABELS: Record<string, string> = {
+  alloy: "Calm & clear",
+  ash: "Soft & gentle",
+  coral: "Bright & cheerful",
+  echo: "Friendly & steady",
+  fable: "Magical & whimsical",
+  nova: "Warm & friendly",
+  onyx: "Deep & reassuring",
+  sage: "Wise & kind",
+  shimmer: "Light & playful",
+};
+
+/** Get allowed voices for a tier */
+export function getVoicesForTier(tier: string): string[] {
+  if (tier === "legend") return [...TTS_VOICES_LEGEND];
+  if (tier === "magic") return [...TTS_VOICES_MAGIC];
+  if (tier === "spark") return [TTS_DEFAULT_VOICE];
+  return [];
 }

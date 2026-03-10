@@ -51,6 +51,22 @@ export default function PricingPage() {
     }
     setLoadingPriceId(priceId);
     try {
+      // Existing subscribers: use change-plan (upgrade prorated, downgrade at period end)
+      if (currentTier && currentTier !== "free") {
+        const res = await fetch("/api/stripe/change-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priceId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to change plan");
+        toast.success(data.message ?? "Plan updated.");
+        // Upgrade: tier changes immediately. Downgrade: tier stays until period end (no effectiveAt = upgrade)
+        if (!data.effectiveAt) setCurrentTier(data.tier ?? currentTier);
+        return;
+      }
+
+      // New subscribers: use checkout
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

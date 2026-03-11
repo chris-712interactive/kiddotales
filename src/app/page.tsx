@@ -377,8 +377,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-4 md:px-8">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
           <Image
             src="/branding/logo.svg"
             alt="KiddoTales"
@@ -388,7 +388,7 @@ export default function LandingPage() {
           />
           <span className="text-xl font-bold text-foreground">KiddoTales</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <AuthButtons />
           <ThemeToggle />
         </div>
@@ -430,7 +430,7 @@ export default function LandingPage() {
                 <Sparkles className="size-12 text-yellow-500" />
               </motion.div>
 
-              <h1 className="mb-4 text-4xl font-bold tracking-tight text-foreground md:text-5xl lg:text-6xl">
+              <h1 className="mb-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
                 Turn 60 seconds into{" "}
                 <span className="text-primary">bedtime magic</span>
               </h1>

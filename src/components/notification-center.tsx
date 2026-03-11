@@ -52,7 +52,7 @@ export function NotificationCenter() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="relative rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2.5 text-muted-foreground hover:bg-muted hover:text-foreground"
         title="Notifications"
         aria-label={count > 0 ? `${count} notifications` : "Notifications"}
       >
@@ -65,7 +65,7 @@ export function NotificationCenter() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border-2 border-border bg-card shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border-2 border-border bg-card shadow-xl">
           <div className="border-b border-border bg-muted/50 px-4 py-3">
             <h3 className="font-semibold text-foreground">Notifications</h3>
             <p className="text-xs text-muted-foreground">

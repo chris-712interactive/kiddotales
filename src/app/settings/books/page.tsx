@@ -115,8 +115,8 @@ export default function ManageBooksPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      <header className="flex items-center justify-between px-4 py-4 md:px-8">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
           <Image
             src="/branding/logo.svg"
             alt="KiddoTales"
@@ -126,11 +126,11 @@ export default function ManageBooksPage() {
           />
           <span className="text-xl font-bold text-foreground">KiddoTales</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Link href="/settings">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-1 size-4" />
-              Settings
+            <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Settings">
+              <ArrowLeft className="size-4 sm:mr-1" />
+              <span className="hidden sm:inline">Settings</span>
             </Button>
           </Link>
           <AuthButtons />
@@ -172,7 +172,7 @@ export default function ManageBooksPage() {
               <div className="space-y-3">
                 {books.map((book) => (
                   <Card key={book.id} className="overflow-hidden">
-                    <CardContent className="flex items-center gap-4 p-4">
+                    <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
                       <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                         {book.coverImageUrl ? (
                           <img
@@ -195,7 +195,7 @@ export default function ManageBooksPage() {
                           )}
                         </p>
                       </div>
-                      <div className="flex shrink-0 gap-2">
+                      <div className="flex shrink-0 flex-wrap gap-2">
                         {subscriptionTier === "free" ? (
                           <Link href="/pricing">
                             <Button size="sm" variant="outline" title="Upgrade to correct books" aria-label="Upgrade to correct books">

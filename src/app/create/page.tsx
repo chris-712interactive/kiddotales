@@ -524,8 +524,8 @@ function CreatePageContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
-      <header className="flex items-center justify-between px-4 py-4 md:px-8">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
         <Image
             src="/branding/logo.svg"
             alt="KiddoTales"
@@ -535,11 +535,11 @@ function CreatePageContent() {
           />
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Link href="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-1 size-4" />
-              Back
+            <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
+              <ArrowLeft className="size-4 sm:mr-1" />
+              <span className="hidden sm:inline">Back</span>
             </Button>
           </Link>
           <AuthButtons />

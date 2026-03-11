@@ -40,7 +40,7 @@ export function ParentalConsentModal({ onConsent, onDismiss }: Props) {
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="w-full max-w-lg"
+          className="w-full max-w-lg max-h-[90vh] overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="parental-consent-title"

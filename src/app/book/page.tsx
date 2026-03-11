@@ -15,6 +15,7 @@ import {
   RectangleVertical,
   RectangleHorizontal,
   Pencil,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -336,8 +337,8 @@ function BookViewerContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
-      <header className="flex items-center justify-between px-4 py-4 md:px-8">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
         <Image
             src="/branding/logo.svg"
             alt="KiddoTales"
@@ -347,39 +348,47 @@ function BookViewerContent() {
           />
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-2">
           {session?.user && book.id && (
             subscriptionTier === "free" ? (
               <Link href="/pricing">
-                <Button variant="outline" size="sm" title="Upgrade to correct books" aria-label="Upgrade to correct books">
-                  <Pencil className="mr-1 size-4" />
-                  Upgrade to correct
+                <Button variant="outline" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" title="Upgrade to correct books" aria-label="Upgrade to correct books">
+                  <Pencil className="size-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Upgrade to correct</span>
                 </Button>
               </Link>
             ) : (
               <Button
                 variant="outline"
                 size="sm"
+                className="size-9 px-2 sm:size-auto sm:px-3"
                 onClick={() => setShowCorrectionModal(true)}
+                aria-label="Correct book"
               >
-                <Pencil className="mr-1 size-4" />
-                Correct
+                <Pencil className="size-4 sm:mr-1" />
+                <span className="hidden sm:inline">Correct</span>
               </Button>
             )
           )}
           <Button
             variant="outline"
             size="sm"
+            className="size-9 px-2 sm:size-auto sm:px-3"
             onClick={() => setShowOrientationDialog(true)}
             disabled={isDownloading}
+            aria-label={isDownloading ? "Generating PDF" : "Download PDF"}
           >
-            <Download className="mr-1 size-4" />
-            {isDownloading ? "Generating..." : "Download PDF"}
+            {isDownloading ? (
+              <Loader2 className="size-4 animate-spin sm:mr-1" />
+            ) : (
+              <Download className="size-4 sm:mr-1" />
+            )}
+            <span className="hidden sm:inline">{isDownloading ? "Generating..." : "Download PDF"}</span>
           </Button>
           <Link href="/create">
-            <Button variant="secondary" size="sm">
-              <Plus className="mr-1 size-4" />
-              Make another book
+            <Button variant="secondary" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Make another book">
+              <Plus className="size-4 sm:mr-1" />
+              <span className="hidden sm:inline">Make another book</span>
             </Button>
           </Link>
           <AuthButtons />

@@ -45,7 +45,7 @@ export function UpgradeConfirmModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="upgrade-modal-title"

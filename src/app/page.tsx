@@ -214,7 +214,32 @@ function DashboardView({
       </motion.section>
 
       {/* Recent books */}
-      {history.length > 0 && (
+      {history.length === 0 ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+        >
+          <h2 className="mb-4 text-xl font-semibold text-foreground">
+            Your recent books
+          </h2>
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/30 p-12 text-center">
+            <BookOpen className="mb-4 size-16 text-muted-foreground" />
+            <p className="mb-2 text-lg font-medium text-foreground">
+              No books yet
+            </p>
+            <p className="mb-6 text-muted-foreground">
+              Create your first personalized storybook and it will appear here.
+            </p>
+            <Link href="/create">
+              <Button size="lg">
+                <BookOpen className="mr-2 size-5" />
+                Create your first book
+              </Button>
+            </Link>
+          </div>
+        </motion.section>
+      ) : (
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

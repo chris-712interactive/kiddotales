@@ -52,7 +52,7 @@ export default function PrivacyPage() {
               <li><strong>Child&apos;s interests</strong> – to personalize the story</li>
               <li><strong>Optional appearance details</strong> – hair color, skin tone, etc., for illustrations</li>
               <li><strong>Life lesson</strong> – the theme you choose for the story</li>
-              <li><strong>Generated content</strong> – story text and AI-generated illustrations</li>
+              <li><strong>Generated content</strong> – story text, AI-generated illustrations, and optional AI voice narration</li>
             </ul>
             <p className="text-muted-foreground">
               We also collect parent/guardian information when you sign in with Google: email address and account identifier.

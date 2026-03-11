@@ -27,6 +27,7 @@ import {
   TTS_DEFAULT_VOICE,
 } from "@/lib/stripe";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
+import { validateCreatePayload } from "@/lib/validation";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -98,6 +99,29 @@ async function createCompletionWithRetry(
   }
 }
 
+/** In-memory rate limit: max 5 generate requests per user per minute. */
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 5;
+
+function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { ok: true };
+  }
+  if (now >= entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { ok: true };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  entry.count++;
+  return { ok: true };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -107,6 +131,22 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id as string;
     const userEmail = session.user.email ?? null;
+
+    const rateLimit = checkRateLimit(userId);
+    if (!rateLimit.ok) {
+      return NextResponse.json(
+        {
+          error: "Too many requests. Please wait a moment before creating another book.",
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: rateLimit.retryAfter
+            ? { "Retry-After": String(rateLimit.retryAfter) }
+            : undefined,
+        }
+      );
+    }
 
     const body = await request.json();
     const {
@@ -120,6 +160,11 @@ export async function POST(request: NextRequest) {
       appearance,
       preferredVoice,
     } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string } & typeof body;
+
+    const validation = validateCreatePayload(body);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
     if (!childName || !interests?.length) {
       return NextResponse.json(
@@ -164,6 +209,35 @@ export async function POST(request: NextRequest) {
         { error: "Replicate API token is not configured." },
         { status: 500 }
       );
+    }
+
+    // Content moderation: check user-provided input before generation
+    const textToModerate = [
+      childName,
+      Array.isArray(interests) ? interests.join(" ") : "",
+      lifeLesson || "",
+      typeof appearance === "object" && appearance
+        ? JSON.stringify(appearance)
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (textToModerate) {
+      try {
+        const mod = await openai.moderations.create({
+          input: textToModerate,
+          model: "text-moderation-latest",
+        });
+        const result = mod.results?.[0];
+        if (result?.flagged) {
+          return NextResponse.json(
+            { error: "Your input could not be processed. Please adjust and try again." },
+            { status: 400 }
+          );
+        }
+      } catch (modErr) {
+        console.warn("[KiddoTales] Moderation check failed, proceeding:", modErr);
+      }
     }
 
     // 1. Generate story with GPT-4o

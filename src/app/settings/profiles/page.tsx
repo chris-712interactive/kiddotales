@@ -191,7 +191,7 @@ export default function ChildProfilesPage() {
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Link href="/create">
-                        <Button size="sm" variant="default" title="Create book with this profile">
+                        <Button size="sm" variant="default" title="Create book with this profile" aria-label={`Create book with ${profile.name}`}>
                           <BookOpen className="size-4" />
                         </Button>
                       </Link>
@@ -199,6 +199,7 @@ export default function ChildProfilesPage() {
                         size="sm"
                         variant="outline"
                         title="Edit"
+                        aria-label={`Edit ${profile.name}`}
                         onClick={() => setModalProfile(profile)}
                       >
                         <Pencil className="size-4" />
@@ -208,6 +209,7 @@ export default function ChildProfilesPage() {
                         variant="destructive"
                         disabled={deletingId === profile.id}
                         title="Delete"
+                        aria-label={`Delete ${profile.name}`}
                         onClick={() => {
                           if (confirm(`Delete profile for ${profile.name}?`)) {
                             handleDelete(profile.id);

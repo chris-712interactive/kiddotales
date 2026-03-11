@@ -351,7 +351,7 @@ function BookViewerContent() {
           {session?.user && book.id && (
             subscriptionTier === "free" ? (
               <Link href="/pricing">
-                <Button variant="outline" size="sm" title="Upgrade to correct books">
+                <Button variant="outline" size="sm" title="Upgrade to correct books" aria-label="Upgrade to correct books">
                   <Pencil className="mr-1 size-4" />
                   Upgrade to correct
                 </Button>
@@ -415,6 +415,7 @@ function BookViewerContent() {
               className="size-12 rounded-full"
               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
               disabled={currentPage === 0}
+              aria-label="Previous page"
             >
               <ChevronLeft className="size-6" />
             </Button>
@@ -469,6 +470,7 @@ function BookViewerContent() {
                 setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
               }
               disabled={currentPage === totalPages - 1}
+              aria-label="Next page"
             >
               <ChevronRight className="size-6" />
             </Button>
@@ -491,8 +493,11 @@ function BookViewerContent() {
                 exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
                 className="rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="orientation-dialog-title"
               >
-                <h3 className="mb-4 text-center text-lg font-semibold text-foreground">
+                <h3 id="orientation-dialog-title" className="mb-4 text-center text-lg font-semibold text-foreground">
                   Choose PDF orientation
                 </h3>
                 <div className="flex gap-4">

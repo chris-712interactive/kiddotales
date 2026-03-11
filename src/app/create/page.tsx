@@ -704,6 +704,7 @@ function CreatePageContent() {
                           size="icon"
                           onClick={isListening ? stopVoiceInput : startVoiceInput}
                           title="Tell me about your child..."
+                          aria-label="Tell me about your child"
                         >
                           {isListening ? (
                             <MicOff className="size-5" />
@@ -920,7 +921,7 @@ function CreatePageContent() {
                           onChange={(e) => setCustomInterest(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomInterest())}
                         />
-                        <Button type="button" variant="outline" onClick={addCustomInterest}>
+                        <Button type="button" variant="outline" onClick={addCustomInterest} aria-label="Add custom interest">
                           <Plus className="size-4" />
                         </Button>
                       </div>
@@ -936,6 +937,7 @@ function CreatePageContent() {
                                 type="button"
                                 onClick={() => removeInterest(i)}
                                 className="hover:text-destructive"
+                                aria-label={`Remove ${i}`}
                               >
                                 <X className="size-3" />
                               </button>

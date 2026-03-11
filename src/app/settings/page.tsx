@@ -407,6 +407,7 @@ function SettingsContent() {
                       disabled={syncLoading}
                       onClick={handleSyncSubscription}
                       title="If you just subscribed, click to sync your plan"
+                      aria-label="Sync subscription plan"
                     >
                       {syncLoading ? (
                         <Loader2 className="mr-1 size-4 animate-spin" />

@@ -198,7 +198,7 @@ export default function ManageBooksPage() {
                       <div className="flex shrink-0 gap-2">
                         {subscriptionTier === "free" ? (
                           <Link href="/pricing">
-                            <Button size="sm" variant="outline" title="Upgrade to correct books">
+                            <Button size="sm" variant="outline" title="Upgrade to correct books" aria-label="Upgrade to correct books">
                               <Pencil className="size-4" />
                             </Button>
                           </Link>
@@ -208,7 +208,7 @@ export default function ManageBooksPage() {
                             onMouseEnter={() => prefetchBook(book.id)}
                             onFocus={() => prefetchBook(book.id)}
                           >
-                            <Button size="sm" variant="outline" title="Correct">
+                            <Button size="sm" variant="outline" title="Correct" aria-label="Correct book">
                               <Pencil className="size-4" />
                             </Button>
                           </Link>
@@ -218,7 +218,7 @@ export default function ManageBooksPage() {
                           onMouseEnter={() => prefetchBook(book.id)}
                           onFocus={() => prefetchBook(book.id)}
                         >
-                          <Button size="sm" variant="outline" title="Open">
+                          <Button size="sm" variant="outline" title="Open" aria-label={`Open ${book.title}`}>
                             <ExternalLink className="size-4" />
                           </Button>
                         </Link>
@@ -227,6 +227,7 @@ export default function ManageBooksPage() {
                           variant="destructive"
                           disabled={deletingId === book.id}
                           onClick={() => handleDeleteBook(book.id)}
+                          aria-label={`Delete ${book.title}`}
                         >
                           {deletingId === book.id ? (
                             <Loader2 className="size-4 animate-spin" />

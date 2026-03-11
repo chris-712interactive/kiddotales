@@ -34,18 +34,22 @@ export function ParentalConsentModal({ onConsent, onDismiss }: Props) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-4 backdrop-blur-sm"
+        role="presentation"
       >
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           className="w-full max-w-lg"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="parental-consent-title"
         >
           <Card className="border-2 shadow-xl">
             <CardHeader className="space-y-1">
               <div className="flex items-center gap-2">
-                <Shield className="size-6 text-primary" />
-                <CardTitle className="text-xl">Parental Consent Required</CardTitle>
+                <Shield className="size-6 text-primary" aria-hidden />
+                <CardTitle id="parental-consent-title" className="text-xl">Parental Consent Required</CardTitle>
               </div>
               <p className="text-sm text-muted-foreground">
                 KiddoTales collects children&apos;s personal information. Under COPPA, we need your consent before creating personalized stories.

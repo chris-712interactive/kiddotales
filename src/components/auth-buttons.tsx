@@ -21,7 +21,7 @@ export function AuthButtons() {
           {session.user.email}
         </span>
         <Link href="/settings">
-          <Button variant="ghost" size="sm" title="Settings">
+          <Button variant="ghost" size="sm" title="Settings" aria-label="Settings">
             <Settings className="size-4" />
           </Button>
         </Link>

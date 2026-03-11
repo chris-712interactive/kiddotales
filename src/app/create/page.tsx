@@ -700,7 +700,7 @@ function CreatePageContent() {
                           setForm((prev) => ({ ...prev, age: Number(e.target.value) }))
                         }
                       >
-                        {Array.from({ length: 9 }, (_, i) => i + 2).map((n) => (
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                           <option key={n} value={n}>
                             {n} years old
                           </option>

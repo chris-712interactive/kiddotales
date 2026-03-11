@@ -97,12 +97,15 @@ export function ProfileFormModal({
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
           className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-modal-title"
         >
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">
+            <h2 id="profile-modal-title" className="text-xl font-semibold text-foreground">
               {isEdit ? "Edit child profile" : "Add child profile"}
             </h2>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
               <X className="size-5" />
             </Button>
           </div>
@@ -203,6 +206,7 @@ export function ProfileFormModal({
                         type="button"
                         onClick={() => removeInterest(i)}
                         className="hover:text-destructive"
+                        aria-label={`Remove ${i}`}
                       >
                         ×
                       </button>

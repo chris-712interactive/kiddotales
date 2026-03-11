@@ -47,8 +47,11 @@ export default function RootLayout({
         <AuthSessionProvider>
           <ThemeProvider defaultTheme="light" storageKey="kiddotales-theme">
             <ThemeSync />
+            <a href="#main" className="sr-only skip-link">
+              Skip to main content
+            </a>
             <div className="flex min-h-screen flex-col">
-              <main className="flex-1">{children}</main>
+              <main id="main" className="flex-1">{children}</main>
               <Footer />
             </div>
           <Toaster

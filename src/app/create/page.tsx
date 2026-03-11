@@ -414,8 +414,14 @@ function CreatePageContent() {
     if (isSubmittingRef.current || isLoading) return;
     isSubmittingRef.current = true;
 
-    if (!form.childName.trim()) {
+    const trimmedName = form.childName.trim();
+    if (!trimmedName) {
       toast.error("Please enter your child's name.");
+      isSubmittingRef.current = false;
+      return;
+    }
+    if (trimmedName.length > 50) {
+      toast.error("Child's name must be 50 characters or less.");
       isSubmittingRef.current = false;
       return;
     }
@@ -432,8 +438,21 @@ function CreatePageContent() {
       return;
     }
 
-    if (form.lifeLesson === "custom" && !customLifeLesson.trim()) {
-      toast.error("Please enter a custom life lesson.");
+    if (form.lifeLesson === "custom") {
+      const lesson = customLifeLesson.trim();
+      if (!lesson) {
+        toast.error("Please enter a custom life lesson.");
+        isSubmittingRef.current = false;
+        return;
+      }
+      if (lesson.length > 50) {
+        toast.error("Life lesson must be 50 characters or less.");
+        isSubmittingRef.current = false;
+        return;
+      }
+    }
+    if (form.age < 1 || form.age > 12) {
+      toast.error("Age must be between 1 and 12.");
       isSubmittingRef.current = false;
       return;
     }
@@ -461,6 +480,12 @@ function CreatePageContent() {
         if (res.status === 401) {
           toast.error("Please sign in to create books.");
           router.push("/sign-in?callbackUrl=/create");
+          return;
+        }
+        if (res.status === 429) {
+          toast.error(err.error || "Too many requests. Please wait a moment and try again.");
+          setIsLoading(false);
+          isSubmittingRef.current = false;
           return;
         }
         throw new Error(err.error || "Failed to generate book");
@@ -499,8 +524,8 @@ function CreatePageContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
-      <header className="flex items-center justify-between px-4 py-4 md:px-8">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
         <Image
             src="/branding/logo.svg"
             alt="KiddoTales"
@@ -510,11 +535,11 @@ function CreatePageContent() {
           />
           <span className="text-xl font-bold">KiddoTales</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Link href="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-1 size-4" />
-              Back
+            <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
+              <ArrowLeft className="size-4 sm:mr-1" />
+              <span className="hidden sm:inline">Back</span>
             </Button>
           </Link>
           <AuthButtons />
@@ -670,6 +695,7 @@ function CreatePageContent() {
                           onChange={(e) =>
                             setForm((prev) => ({ ...prev, childName: e.target.value }))
                           }
+                          maxLength={50}
                           className="flex-1"
                         />
                         <Button
@@ -678,6 +704,7 @@ function CreatePageContent() {
                           size="icon"
                           onClick={isListening ? stopVoiceInput : startVoiceInput}
                           title="Tell me about your child..."
+                          aria-label="Tell me about your child"
                         >
                           {isListening ? (
                             <MicOff className="size-5" />
@@ -894,7 +921,7 @@ function CreatePageContent() {
                           onChange={(e) => setCustomInterest(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomInterest())}
                         />
-                        <Button type="button" variant="outline" onClick={addCustomInterest}>
+                        <Button type="button" variant="outline" onClick={addCustomInterest} aria-label="Add custom interest">
                           <Plus className="size-4" />
                         </Button>
                       </div>
@@ -910,6 +937,7 @@ function CreatePageContent() {
                                 type="button"
                                 onClick={() => removeInterest(i)}
                                 className="hover:text-destructive"
+                                aria-label={`Remove ${i}`}
                               >
                                 <X className="size-3" />
                               </button>
@@ -940,6 +968,7 @@ function CreatePageContent() {
                           placeholder="e.g. being patient"
                           value={customLifeLesson}
                           onChange={(e) => setCustomLifeLesson(e.target.value)}
+                          maxLength={50}
                         />
                       )}
                     </div>

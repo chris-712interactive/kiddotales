@@ -10,6 +10,10 @@ export function Footer() {
           Privacy Policy
         </Link>
         <span className="hidden sm:inline">·</span>
+        <Link href="/terms" className="underline hover:text-foreground">
+          Terms of Service
+        </Link>
+        <span className="hidden sm:inline">·</span>
         <span>© {new Date().getFullYear()} KiddoTales</span>
       </div>
     </footer>

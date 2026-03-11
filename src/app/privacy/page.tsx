@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      <header className="flex items-center justify-between px-4 py-4 md:px-8">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
           <Image
             src="/branding/logo.svg"
             alt="KiddoTales"
@@ -20,9 +20,9 @@ export default function PrivacyPage() {
           <span className="text-xl font-bold text-foreground">KiddoTales</span>
         </Link>
         <Link href="/">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-1 size-4" />
-            Back
+          <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
+            <ArrowLeft className="size-4 sm:mr-1" />
+            <span className="hidden sm:inline">Back</span>
           </Button>
         </Link>
       </header>
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
               <li><strong>Child&apos;s interests</strong> – to personalize the story</li>
               <li><strong>Optional appearance details</strong> – hair color, skin tone, etc., for illustrations</li>
               <li><strong>Life lesson</strong> – the theme you choose for the story</li>
-              <li><strong>Generated content</strong> – story text and AI-generated illustrations</li>
+              <li><strong>Generated content</strong> – story text, AI-generated illustrations, and optional AI voice narration</li>
             </ul>
             <p className="text-muted-foreground">
               We also collect parent/guardian information when you sign in with Google: email address and account identifier.

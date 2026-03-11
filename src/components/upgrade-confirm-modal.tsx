@@ -45,16 +45,19 @@ export function UpgradeConfirmModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upgrade-modal-title"
           >
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="size-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">
+                <Sparkles className="size-5 text-primary" aria-hidden />
+                <h2 id="upgrade-modal-title" className="text-xl font-semibold text-foreground">
                   Upgrade to {tierName}
                 </h2>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
                 <X className="size-5" />
               </Button>
             </div>

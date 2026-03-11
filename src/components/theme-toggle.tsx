@@ -27,7 +27,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     <Button
       variant="ghost"
       size="icon"
-      className={cn("rounded-full", className)}
+      className={cn("size-10 shrink-0 rounded-full sm:size-9", className)}
       onClick={handleToggle}
       aria-label="Toggle theme"
     >

@@ -6,7 +6,7 @@ import { Sparkles, BookOpen, Check, Loader2 } from "lucide-react";
 
 const STAR_COUNT = 12;
 
-const GENERATION_STEPS = [
+const BASE_GENERATION_STEPS = [
   "Generating your story",
   "Creating the cover image",
   "Illustrating page 1",
@@ -20,9 +20,34 @@ const GENERATION_STEPS = [
   "Finishing up",
 ];
 
+const AI_VOICE_STEPS = [
+  "Adding AI voice to page 1",
+  "Adding AI voice to page 2",
+  "Adding AI voice to page 3",
+  "Adding AI voice to page 4",
+  "Adding AI voice to page 5",
+  "Adding AI voice to page 6",
+  "Adding AI voice to page 7",
+  "Adding AI voice to page 8",
+];
+
 const STEP_INTERVAL_MS = 15_000;
 
-export function LoadingScreen({ showSteps = false }: { showSteps?: boolean }) {
+export function LoadingScreen({
+  showSteps = false,
+  hasAiVoice = false,
+}: {
+  showSteps?: boolean;
+  hasAiVoice?: boolean;
+}) {
+  const GENERATION_STEPS =
+    hasAiVoice
+      ? [
+          ...BASE_GENERATION_STEPS.slice(0, -1),
+          ...AI_VOICE_STEPS,
+          BASE_GENERATION_STEPS[BASE_GENERATION_STEPS.length - 1],
+        ]
+      : BASE_GENERATION_STEPS;
   const [completedSteps, setCompletedSteps] = useState(0);
   const [startTime] = useState(() => Date.now());
 
@@ -106,7 +131,7 @@ export function LoadingScreen({ showSteps = false }: { showSteps?: boolean }) {
           Weaving your magic story...
         </p>
         {showSteps ? (
-          <div className="w-full max-w-sm space-y-2">
+          <div className="w-full max-w-sm max-h-[50vh] overflow-y-auto space-y-2 creation-steps-container creation-steps-container-light dark:creation-steps-container-dark">
             {GENERATION_STEPS.map((step, i) => (
               <div
                 key={step}

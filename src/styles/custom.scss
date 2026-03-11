@@ -31,3 +31,21 @@
 .loading-book-container {
   background: linear-gradient(45deg, #5f79ea, #18e8d9);
 }
+
+.creation-steps-container {
+  border-radius: var(--radius-xl);
+  padding: 1rem 1.25rem;
+  box-sizing: border-box;
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  &-light {
+    background: rgba(255, 255, 255, 0.65);
+  }
+
+  &-dark {
+    background: rgba(25, 28, 35, 0.75);
+  }
+}

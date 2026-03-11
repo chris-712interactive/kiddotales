@@ -13,6 +13,7 @@ import {
   Calendar,
   Loader2,
   ExternalLink,
+  Volume2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -52,9 +53,12 @@ type DashboardData = {
   bookCount: number;
   bookLimit: number;
   bookLimitPeriod: "total" | "monthly";
+  voiceCount?: number;
+  voiceLimit?: number;
   subscriptionTier: string;
   nextBillingDate: string | null;
   cancelAtPeriodEnd?: boolean;
+  displayName?: string | null;
 };
 
 function DashboardView({
@@ -82,7 +86,7 @@ function DashboardView({
       >
         <div className="mb-6 text-center md:mb-0 md:text-left">
           <h1 className="mb-2 text-2xl font-bold text-foreground md:text-3xl">
-            Welcome back
+            Welcome back{data.displayName ? `, ${data.displayName}` : ""}!
           </h1>
           <p className="text-muted-foreground">
             Ready to create another bedtime story?
@@ -92,6 +96,33 @@ function DashboardView({
           <Button size="lg" className="text-lg">
             <BookOpen className="mr-2 size-5" />
             Create a book
+          </Button>
+        </Link>
+      </motion.section>
+
+      {/* Quick links */}
+      <motion.section
+        className="flex flex-wrap gap-3"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
+        <Link href="/settings">
+          <Button variant="outline" size="sm">
+            <Settings className="mr-1 size-4" />
+            Settings
+          </Button>
+        </Link>
+        <Link href="/settings/books">
+          <Button variant="outline" size="sm">
+            <BookOpen className="mr-1 size-4" />
+            My books
+          </Button>
+        </Link>
+        <Link href="/pricing">
+          <Button variant="outline" size="sm">
+            <ExternalLink className="mr-1 size-4" />
+            Plans & pricing
           </Button>
         </Link>
       </motion.section>
@@ -115,6 +146,21 @@ function DashboardView({
             books {usageLabel}
           </p>
         </div>
+
+        {typeof data.voiceLimit === "number" && data.voiceLimit > 0 && (
+          <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-md">
+            <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+              <Volume2 className="size-5" />
+              <span className="text-sm font-medium">AI voice</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {(data.voiceCount ?? 0)} / {data.voiceLimit}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              books with AI voice {usageLabel}
+            </p>
+          </div>
+        )}
 
         <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-md">
           <div className="mb-2 flex items-center gap-2 text-muted-foreground">
@@ -165,33 +211,6 @@ function DashboardView({
             <p className="text-muted-foreground">—</p>
           )}
         </div>
-      </motion.section>
-
-      {/* Quick links */}
-      <motion.section
-        className="flex flex-wrap gap-3"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.2 }}
-      >
-        <Link href="/settings">
-          <Button variant="outline" size="sm">
-            <Settings className="mr-1 size-4" />
-            Settings
-          </Button>
-        </Link>
-        <Link href="/settings/books">
-          <Button variant="outline" size="sm">
-            <BookOpen className="mr-1 size-4" />
-            My books
-          </Button>
-        </Link>
-        <Link href="/pricing">
-          <Button variant="outline" size="sm">
-            <ExternalLink className="mr-1 size-4" />
-            Plans & pricing
-          </Button>
-        </Link>
       </motion.section>
 
       {/* Recent books */}
@@ -297,9 +316,12 @@ export default function LandingPage() {
               bookCount: res.bookCount ?? 0,
               bookLimit: res.bookLimit ?? 3,
               bookLimitPeriod: res.bookLimitPeriod ?? "total",
+              voiceCount: res.voiceCount ?? 0,
+              voiceLimit: res.voiceLimit ?? 0,
               subscriptionTier: res.subscriptionTier ?? "free",
               nextBillingDate: res.nextBillingDate ?? null,
               cancelAtPeriodEnd: res.cancelAtPeriodEnd ?? false,
+              displayName: res.profile?.displayName ?? res.profile?.name ?? null,
             });
           }
         })
@@ -319,6 +341,8 @@ export default function LandingPage() {
           bookCount: 0,
           bookLimit: 3,
           bookLimitPeriod: "total" as const,
+          voiceCount: 0,
+          voiceLimit: 0,
           subscriptionTier: "free",
           nextBillingDate: null,
           cancelAtPeriodEnd: false,

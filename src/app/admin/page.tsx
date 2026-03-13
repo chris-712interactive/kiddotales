@@ -78,8 +78,8 @@ function BooksByTierLineChart({
           />
           <YAxis allowDecimals={false} className="text-xs" />
           <Tooltip
-            labelFormatter={(v) => new Date(v).toLocaleDateString()}
-            formatter={(value: number) => [value, "Books"]}
+            labelFormatter={(v) => new Date(v as string).toLocaleDateString()}
+            formatter={(value) => [value ?? 0, "Books"]}
             labelStyle={{ color: "hsl(var(--foreground))" }}
           />
           <Legend />

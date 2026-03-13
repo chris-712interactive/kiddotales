@@ -325,6 +325,7 @@ export async function POST(request: NextRequest) {
     }
 
     const styleSuffix = ART_STYLE_PROMPTS[artStyle] || ART_STYLE_PROMPTS["whimsical-watercolor"];
+    const isPhotoRealistic = artStyle === "photo-realistic";
 
     // Character consistency: prepend same description to every image prompt
     // Parent-selected appearance overrides GPT's characterDescription when provided
@@ -337,32 +338,43 @@ export async function POST(request: NextRequest) {
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
-    const characterPrefix =
+    let characterPrefix =
       appearancePrefix ||
       parsed.characterDescription?.trim() ||
       `A ${age || 5}-year-old ${genderPhrase} named ${childName}, children's book illustration style.`;
 
-    // 2. Generate cover image first, then page images (throttled: free tier = 6 req/min)
-    console.log("[KiddoTales] OpenAI done, starting Replicate (cover + 8 images, throttled)...");
-    let coverImageUrl = "";
+    if (isPhotoRealistic) {
+      characterPrefix =
+        characterPrefix.replace(/,\s*children's book illustration style\.?$/i, "") +
+        ". Realistic skin texture, natural skin tones, lifelike hair detail, soft diffused natural lighting on face, photorealistic child portrait quality";
+    }
 
     const secondaryChar =
       parsed.secondaryCharacterDescription?.trim() || null;
+    const effectiveSecondaryChar =
+      isPhotoRealistic && secondaryChar
+        ? secondaryChar +
+          ". Photorealistic texture, natural lighting, lifelike rendering, highly detailed and realistic"
+        : secondaryChar;
+
+    // 2. Generate cover image first, then page images (throttled: free tier = 6 req/min)
+    console.log("[KiddoTales] OpenAI done, starting Replicate (cover + 8 images, throttled)...");
+    let coverImageUrl = "";
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
-    const fullCoverPrompt = secondaryChar
-      ? `${characterPrefix}. The child and creature are two separate beings. ${secondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`
+    const fullCoverPrompt = effectiveSecondaryChar
+      ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`
       : `${characterPrefix}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`;
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
         const output = await replicate.run(
-          "black-forest-labs/flux-schnell" as `${string}/${string}`,
-          { input: { prompt: fullCoverPrompt, num_outputs: 1, output_format: "png" } }
+          "black-forest-labs/flux-2-dev" as `${string}/${string}`,
+          { input: { prompt: fullCoverPrompt, output_format: "png", aspect_ratio: "4:5" } }
         );
         const result = Array.isArray(output) ? output[0] : output;
         if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
@@ -392,16 +404,16 @@ export async function POST(request: NextRequest) {
       const page = parsed.pages[i];
       const promptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
       const includeSecondary =
-        secondaryChar && page.secondaryCharacterInScene === true;
+        effectiveSecondaryChar && page.secondaryCharacterInScene === true;
       const scenePart = includeSecondary
-        ? `${characterPrefix}. The child and creature are two separate beings. ${secondaryChar}. ${promptText}. ${styleSuffix}`
+        ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}. ${styleSuffix}`
         : `${characterPrefix}. ${promptText}. ${styleSuffix}`;
       const fullPrompt = `${scenePart}. ${antiHybridSuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const output = await replicate.run(
-            "black-forest-labs/flux-schnell" as `${string}/${string}`,
-            { input: { prompt: fullPrompt, num_outputs: 1, output_format: "png" } }
+            "black-forest-labs/flux-2-dev" as `${string}/${string}`,
+            { input: { prompt: fullPrompt, output_format: "png", aspect_ratio: "4:5" } }
           );
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {

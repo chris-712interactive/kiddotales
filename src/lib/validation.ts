@@ -7,6 +7,7 @@ const VALID_ART_STYLES = new Set([
   "pixar-3d",
   "hand-drawn-classic",
   "vibrant-cartoon",
+  "photo-realistic",
 ]);
 
 export type ValidationResult = { ok: true } | { ok: false; error: string };

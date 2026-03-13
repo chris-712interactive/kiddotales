@@ -120,6 +120,7 @@ export const ART_STYLES = [
   "pixar-3d",
   "hand-drawn-classic",
   "vibrant-cartoon",
+  "photo-realistic",
 ] as const;
 
 export type ArtStyle = (typeof ART_STYLES)[number];

@@ -18,10 +18,7 @@
   width: 100%;
   max-height: 400px;
   object-fit: cover;
-  aspect-ratio: 3/4;
-  @include respond-to(md) {
-    aspect-ratio: 4/5;
-  }
+  aspect-ratio: 4/5;
 }
 
 .loading-book-icon {

@@ -67,9 +67,10 @@ export async function getAdminStats() {
     .select("*", { count: "exact", head: true });
 
   // Books by subscription tier by day (last 30 days) - for line chart
+  // Uses subscription_tier_at_creation (stored when book is generated)
   const { data: booksLast30 } = await supabase
     .from("books")
-    .select("created_at, users!inner(subscription_tier)")
+    .select("created_at, subscription_tier_at_creation")
     .gte("created_at", thirtyDaysAgoStr);
   const tierOrder = ["free", "spark", "magic", "legend"];
   const byDate: Record<string, Record<string, number>> = {};
@@ -80,7 +81,7 @@ export async function getAdminStats() {
     byDate[key] = Object.fromEntries(tierOrder.map((t) => [t, 0]));
   }
   for (const row of booksLast30 ?? []) {
-    const tier = (row.users as { subscription_tier?: string } | null)?.subscription_tier ?? "free";
+    const tier = (row.subscription_tier_at_creation as string) ?? "free";
     const key = (row.created_at as string).slice(0, 10);
     if (byDate[key] && (tierOrder.includes(tier) || tier)) {
       byDate[key][tier] = (byDate[key][tier] ?? 0) + 1;

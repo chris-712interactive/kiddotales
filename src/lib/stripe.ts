@@ -109,6 +109,18 @@ export function getTierRank(tier: string): number {
   return TIER_RANK[tier as SubscriptionTierId] ?? 0;
 }
 
+/** Get Stripe price ID for a tier (for admin/manual subscription updates) */
+export function getPriceIdForTier(
+  tier: string,
+  period: "monthly" | "yearly" = "monthly"
+): string | null {
+  if (tier === "free") return null;
+  const config = SUBSCRIPTION_TIERS[tier as SubscriptionTierId];
+  if (!config) return null;
+  const c = config as { priceIdMonthly?: string; priceIdYearly?: string };
+  return (period === "yearly" ? c.priceIdYearly : c.priceIdMonthly) ?? null;
+}
+
 /** Map Stripe price ID to tier */
 export function getTierFromPriceId(priceId: string): SubscriptionTierId | null {
   const priceMap: Record<string, SubscriptionTierId> = {};

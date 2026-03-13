@@ -198,20 +198,22 @@ export default function AdminPage() {
 
           {/* Stats overview */}
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Users className="size-5" />
-                  Users
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{stats.users.total}</p>
-                <p className="text-sm text-muted-foreground">
-                  +{stats.users.newThisMonth} this month
-                </p>
-              </CardContent>
-            </Card>
+            <Link href="/admin/users">
+              <Card className="transition-colors hover:border-primary/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Users className="size-5" />
+                    Users
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{stats.users.total}</p>
+                  <p className="text-sm text-muted-foreground">
+                    +{stats.users.newThisMonth} this month · Manage
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">

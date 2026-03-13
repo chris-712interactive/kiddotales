@@ -32,6 +32,7 @@ function BookViewerContent() {
   const [currentPage, setCurrentPage] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [speakingPage, setSpeakingPage] = useState<number | null>(null);
+  const [isPlayingAll, setIsPlayingAll] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
@@ -272,6 +273,84 @@ function BookViewerContent() {
     [book, speakingPage]
   );
 
+  const hasCustomAudio = book?.pages?.some((p) => p.audioUrl) ?? false;
+  const hasDedication = Boolean(book?.dedication?.message || book?.dedication?.from);
+
+  const handlePlayAll = useCallback(() => {
+    if (!book || !book.pages?.length) return;
+    if (isPlayingAll) {
+      window.speechSynthesis?.cancel();
+      audioRef.current?.pause();
+      setIsPlayingAll(false);
+      setSpeakingPage(null);
+      return;
+    }
+    const pages = book.pages;
+    let pageIndex = 0;
+    const dedicationOffset = hasDedication ? 1 : 0;
+    setIsPlayingAll(true);
+
+    const playNext = () => {
+      if (pageIndex >= pages.length) {
+        setIsPlayingAll(false);
+        setSpeakingPage(null);
+        return;
+      }
+      const page = pages[pageIndex];
+      const text = page?.text?.trim();
+      setSpeakingPage(pageIndex);
+      setCurrentPage(pageIndex + dedicationOffset);
+
+      if (page?.audioUrl) {
+        const audio = new Audio(page.audioUrl);
+        audioRef.current = audio;
+        audio.onended = () => {
+          pageIndex++;
+          playNext();
+        };
+        audio.onerror = () => {
+          setIsPlayingAll(false);
+          setSpeakingPage(null);
+          toast.error("Could not play audio.");
+        };
+        audio.play().catch(() => {
+          setIsPlayingAll(false);
+          setSpeakingPage(null);
+          toast.error("Could not play audio.");
+        });
+      } else if (text) {
+        window.speechSynthesis?.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        utterance.pitch = 1.1;
+        const voices = window.speechSynthesis.getVoices();
+        const kidVoice = voices.find((v) => v.name.includes("Child") || v.name.includes("Samantha"));
+        if (kidVoice) utterance.voice = kidVoice;
+        utterance.onend = () => {
+          pageIndex++;
+          playNext();
+        };
+        utterance.onerror = () => {
+          pageIndex++;
+          playNext();
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        pageIndex++;
+        playNext();
+      }
+    };
+    playNext();
+  }, [book, isPlayingAll, hasDedication]);
+
+  useEffect(() => {
+    if (!isPlayingAll) return;
+    return () => {
+      window.speechSynthesis?.cancel();
+      audioRef.current?.pause();
+    };
+  }, [isPlayingAll]);
+
   const handleDownloadPDF = useCallback(
     async (orientation: "portrait" | "landscape") => {
       if (!book) return;
@@ -329,7 +408,6 @@ function BookViewerContent() {
     );
   }
 
-  const hasDedication = Boolean(book.dedication?.message || book.dedication?.from);
   const totalPages = hasDedication ? 1 + book.pages.length : book.pages.length;
   const isDedicationPage = hasDedication && currentPage === 0;
   const page = isDedicationPage ? null : book.pages[hasDedication ? currentPage - 1 : currentPage];
@@ -462,17 +540,32 @@ function BookViewerContent() {
                       </div>
                     </div>
 
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-4"
-                      onClick={() => handleReadAloud(hasDedication ? currentPage - 1 : currentPage)}
-                    >
-                      <Volume2
-                        className={`mr-2 size-4 ${speakingPage === (hasDedication ? currentPage - 1 : currentPage) ? "text-primary" : ""}`}
-                      />
-                      {speakingPage === (hasDedication ? currentPage - 1 : currentPage) ? "Stop" : "Read aloud"}
-                    </Button>
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                      {hasCustomAudio && (
+                        <Button
+                          variant={isPlayingAll ? "default" : "outline"}
+                          size="sm"
+                          onClick={handlePlayAll}
+                        >
+                          <Volume2
+                            className={`mr-2 size-4 ${isPlayingAll ? "text-primary-foreground" : ""}`}
+                          />
+                          {isPlayingAll ? "Stop" : "Listen to full story"}
+                        </Button>
+                      )}
+                      {!isPlayingAll && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReadAloud(hasDedication ? currentPage - 1 : currentPage)}
+                        >
+                          <Volume2
+                            className={`mr-2 size-4 ${speakingPage === (hasDedication ? currentPage - 1 : currentPage) ? "text-primary" : ""}`}
+                          />
+                          {speakingPage === (hasDedication ? currentPage - 1 : currentPage) ? "Stop" : "Read aloud"}
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </motion.div>

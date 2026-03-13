@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen,
@@ -18,12 +17,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { AuthButtons } from "@/components/auth-buttons";
 import { saveBookToHistory, getBookHistory, getBookByCreatedAt } from "@/lib/storage";
 import { toast } from "sonner";
 import type { BookData } from "@/types";
 import { CorrectionModal } from "@/components/correction-modal";
+import { AppHeader } from "@/components/app-header";
 import { useSession } from "next-auth/react";
 import { PENDING_BOOK_KEY, PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
 
@@ -331,70 +329,62 @@ function BookViewerContent() {
     );
   }
 
-  const totalPages = book.pages.length;
-  const page = book.pages[currentPage];
+  const hasDedication = Boolean(book.dedication?.message || book.dedication?.from);
+  const totalPages = hasDedication ? 1 + book.pages.length : book.pages.length;
+  const isDedicationPage = hasDedication && currentPage === 0;
+  const page = isDedicationPage ? null : book.pages[hasDedication ? currentPage - 1 : currentPage];
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-        <Image
-            src="/branding/logo.svg"
-            alt="KiddoTales"
-            width={32}
-            height={32}
-            className="size-8 object-contain"
-          />
-          <span className="text-xl font-bold">KiddoTales</span>
-        </Link>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-2">
-          {session?.user && book.id && (
-            subscriptionTier === "free" ? (
-              <Link href="/pricing">
-                <Button variant="outline" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" title="Upgrade to correct books" aria-label="Upgrade to correct books">
+      <AppHeader
+        pageActions={
+          <>
+            {session?.user && book.id && (
+              subscriptionTier === "free" ? (
+                <Link href="/pricing">
+                  <Button variant="outline" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" title="Upgrade to correct books" aria-label="Upgrade to correct books">
+                    <Pencil className="size-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Upgrade</span>
+                  </Button>
+                </Link>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="size-9 px-2 sm:size-auto sm:px-3"
+                  onClick={() => setShowCorrectionModal(true)}
+                  aria-label="Correct book"
+                >
                   <Pencil className="size-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Upgrade to correct</span>
+                  <span className="hidden sm:inline">Correct</span>
                 </Button>
-              </Link>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                className="size-9 px-2 sm:size-auto sm:px-3"
-                onClick={() => setShowCorrectionModal(true)}
-                aria-label="Correct book"
-              >
-                <Pencil className="size-4 sm:mr-1" />
-                <span className="hidden sm:inline">Correct</span>
-              </Button>
-            )
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="size-9 px-2 sm:size-auto sm:px-3"
-            onClick={() => setShowOrientationDialog(true)}
-            disabled={isDownloading}
-            aria-label={isDownloading ? "Generating PDF" : "Download PDF"}
-          >
-            {isDownloading ? (
-              <Loader2 className="size-4 animate-spin sm:mr-1" />
-            ) : (
-              <Download className="size-4 sm:mr-1" />
+              )
             )}
-            <span className="hidden sm:inline">{isDownloading ? "Generating..." : "Download PDF"}</span>
-          </Button>
-          <Link href="/create">
-            <Button variant="secondary" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Make another book">
-              <Plus className="size-4 sm:mr-1" />
-              <span className="hidden sm:inline">Make another book</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="size-9 px-2 sm:size-auto sm:px-3"
+              onClick={() => setShowOrientationDialog(true)}
+              disabled={isDownloading}
+              aria-label={isDownloading ? "Generating PDF" : "Download PDF"}
+            >
+              {isDownloading ? (
+                <Loader2 className="size-4 animate-spin sm:mr-1" />
+              ) : (
+                <Download className="size-4 sm:mr-1" />
+              )}
+              <span className="hidden sm:inline">{isDownloading ? "Generating..." : "PDF"}</span>
             </Button>
-          </Link>
-          <AuthButtons />
-          <ThemeToggle />
-        </div>
-      </header>
+            <Link href="/create">
+              <Button variant="secondary" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Make another book">
+                <Plus className="size-4 sm:mr-1" />
+                <span className="hidden sm:inline">New book</span>
+              </Button>
+            </Link>
+          </>
+        }
+      />
 
       <main className="mx-auto max-w-4xl px-4 pb-16">
         <h1 className="mb-6 text-center text-2xl font-bold text-foreground">
@@ -438,36 +428,53 @@ function BookViewerContent() {
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.3 }}
               >
-                <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10">
-                  {(page.imageData || page.imageUrl) ? (
-                    <img
-                      src={page.imageData || page.imageUrl}
-                      alt={`Page ${currentPage + 1}`}
-                      className="w-full object-cover book-page-image"
-                    />
-                  ) : (
-                    <div className="flex h-[300px] w-full items-center justify-center bg-muted md:h-[400px] md:w-[500px]">
-                      <BookOpen className="size-16 text-muted-foreground" />
+                {isDedicationPage && book.dedication ? (
+                  <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10 md:w-[500px]">
+                    <div className="flex min-h-[300px] flex-col items-center justify-center p-8 md:min-h-[400px]">
+                      <p className="text-center text-xl leading-relaxed text-foreground">
+                        {book.dedication.message}
+                      </p>
+                      {book.dedication.from && (
+                        <p className="mt-4 text-center text-sm italic text-muted-foreground">
+                          — {book.dedication.from}
+                        </p>
+                      )}
                     </div>
-                  )}
-                  <div className="p-6">
-                    <p className="text-center text-lg leading-relaxed text-foreground">
-                      {page.text}
-                    </p>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10">
+                      {(page?.imageData || page?.imageUrl) ? (
+                        <img
+                          src={page?.imageData || page?.imageUrl}
+                          alt={`Page ${(hasDedication ? currentPage : currentPage + 1)}`}
+                          className="w-full object-cover book-page-image"
+                        />
+                      ) : (
+                        <div className="flex h-[300px] w-full items-center justify-center bg-muted md:h-[400px] md:w-[500px]">
+                          <BookOpen className="size-16 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="p-6">
+                        <p className="text-center text-lg leading-relaxed text-foreground">
+                          {page?.text}
+                        </p>
+                      </div>
+                    </div>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => handleReadAloud(currentPage)}
-                >
-                  <Volume2
-                    className={`mr-2 size-4 ${speakingPage === currentPage ? "text-primary" : ""}`}
-                  />
-                  {speakingPage === currentPage ? "Stop" : "Read aloud"}
-                </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-4"
+                      onClick={() => handleReadAloud(hasDedication ? currentPage - 1 : currentPage)}
+                    >
+                      <Volume2
+                        className={`mr-2 size-4 ${speakingPage === (hasDedication ? currentPage - 1 : currentPage) ? "text-primary" : ""}`}
+                      />
+                      {speakingPage === (hasDedication ? currentPage - 1 : currentPage) ? "Stop" : "Read aloud"}
+                    </Button>
+                  </>
+                )}
               </motion.div>
             </AnimatePresence>
 
@@ -563,7 +570,7 @@ function BookViewerContent() {
 
         {/* Page indicator */}
         <div className="mt-6 flex justify-center gap-2">
-          {book.pages.map((_, i) => (
+          {Array.from({ length: totalPages }, (_, i) => (
             <button
               key={i}
               onClick={() => setCurrentPage(i)}

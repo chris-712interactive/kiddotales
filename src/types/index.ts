@@ -7,6 +7,8 @@ export interface BookPage {
   text: string;
   imagePrompt?: string;
   illustrationPromptBase?: string; // from prompts.ts schema
+  /** True if the secondary character (from story) appears in this page's illustration */
+  secondaryCharacterInScene?: boolean;
   imageUrl?: string;
   /** Base64 data URL for persistent storage (survives Replicate URL expiry) */
   imageData?: string;
@@ -16,11 +18,19 @@ export interface BookPage {
   audioVoice?: string;
 }
 
+/** Optional dedication page: message from parent/guardian, shown after cover, before first story page. No illustration, no voice-over. */
+export interface Dedication {
+  message: string;
+  from: string;
+}
+
 export interface BookData {
   id?: string;
   title: string;
   pages: BookPage[];
   createdAt: string;
+  /** Optional dedication page (message + from) shown after cover, before first interior illustration */
+  dedication?: Dedication;
   /** Cover image URL - AI-generated to encompass the whole story */
   coverImageUrl?: string;
   /** Base64 data URL for persistent storage */
@@ -50,6 +60,8 @@ export interface CreateFormData {
   appearance?: CharacterAppearance;
   /** AI voice for read-aloud (Spark: default, Magic: 3 options, Legend: all) */
   preferredVoice?: string;
+  /** Optional dedication: message + from, shown after cover, before first story page. No illustration, no voice-over. */
+  dedication?: Dedication;
 }
 
 /** Stored with each book for correction flow */

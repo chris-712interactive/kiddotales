@@ -23,6 +23,7 @@ function isNameOnlyChange(
   if (!same(meta.lifeLesson, corrected.lifeLesson)) return false;
   if (!same(meta.artStyle, corrected.artStyle)) return false;
   if (!same(meta.appearance ?? {}, corrected.appearance ?? {})) return false;
+  if (!same(meta.dedication ?? null, corrected.dedication ?? null)) return false;
   return meta.childName !== corrected.childName;
 }
 
@@ -103,6 +104,8 @@ export async function POST(
     lifeLesson: lifeLesson ?? meta?.lifeLesson ?? "kindness",
     artStyle: artStyle ?? meta?.artStyle ?? "whimsical-watercolor",
     appearance: appearance ?? meta?.appearance ?? {},
+    dedication: meta?.dedication,
+    preferredVoice: meta?.preferredVoice,
   };
 
   const nameOnly = isNameOnlyChange(meta, corrected);
@@ -175,6 +178,8 @@ export async function POST(
         lifeLesson: corrected.lifeLesson,
         artStyle: corrected.artStyle,
         appearance: corrected.appearance,
+        dedication: corrected.dedication,
+        preferredVoice: corrected.preferredVoice,
       }),
     });
 

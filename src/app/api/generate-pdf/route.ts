@@ -224,6 +224,48 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ---- Dedication page (optional): after cover, before first story page ----
+    const hasDedication = Boolean(book.dedication?.message || book.dedication?.from);
+    if (hasDedication && book.dedication) {
+      const dedicationPage = pdfDoc.addPage([pageSize.width, pageSize.height]);
+      const dedicationContentWidth = pageSize.width - OUTER_MARGIN * 2 - TEXT_PAGE_PADDING * 2;
+      const dedicationFontSize = 24;
+      const dedicationLines = wrapText(
+        book.dedication.message,
+        font,
+        dedicationFontSize,
+        dedicationContentWidth
+      );
+      const dedicationLineHeight = dedicationFontSize * LINE_HEIGHT;
+      const dedicationBlockHeight = dedicationLines.length * dedicationLineHeight;
+      const dedicationStartY = (pageSize.height + dedicationBlockHeight) / 2;
+
+      for (let j = 0; j < dedicationLines.length; j++) {
+        const line = dedicationLines[j];
+        const lineWidth = font.widthOfTextAtSize(line, dedicationFontSize);
+        dedicationPage.drawText(line, {
+          x: OUTER_MARGIN + TEXT_PAGE_PADDING + (dedicationContentWidth - lineWidth) / 2,
+          y: dedicationStartY - (j + 1) * dedicationLineHeight,
+          size: dedicationFontSize,
+          font,
+          color: TEXT_COLOR,
+        });
+      }
+
+      if (book.dedication.from) {
+        const fromText = `— ${book.dedication.from}`;
+        const fromSize = 16;
+        const fromWidth = font.widthOfTextAtSize(fromText, fromSize);
+        dedicationPage.drawText(fromText, {
+          x: (pageSize.width - fromWidth) / 2,
+          y: dedicationStartY - dedicationLines.length * dedicationLineHeight - 40,
+          size: fromSize,
+          font,
+          color: rgb(0.45, 0.48, 0.55),
+        });
+      }
+    }
+
     // ---- Story spreads: for each story page, add IMAGE first (left), then TEXT (right) ----
     // Order: image, text, image, text... (pages are recto/verso when printed)
     for (let i = 0; i < book.pages.length; i++) {

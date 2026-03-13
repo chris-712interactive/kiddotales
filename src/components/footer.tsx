@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FeedbackTrigger } from "./feedback-trigger";
 
 export function Footer() {
   return (
@@ -13,6 +14,8 @@ export function Footer() {
         <Link href="/terms" className="underline hover:text-foreground">
           Terms of Service
         </Link>
+        <span className="hidden sm:inline">·</span>
+        <FeedbackTrigger variant="link" />
         <span className="hidden sm:inline">·</span>
         <span>© {new Date().getFullYear()} KiddoTales</span>
       </div>

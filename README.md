@@ -45,6 +45,7 @@
    - `AUTH_SECRET` – Generate with `openssl rand -base64 32`
    - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` – [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
    - `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` – [Supabase](https://supabase.com) (for book limits and cross-device sync)
+   - `ADMIN_EMAILS` – Comma-separated list of admin emails for the admin portal (e.g. `you@example.com`)
 
 3. **Supabase setup** (optional but recommended)
    - Create a project at [supabase.com](https://supabase.com)
@@ -85,6 +86,7 @@ src/
 - **/** – Hero, testimonials, recent books
 - **/create** – Form: name, age, pronouns, interests, life lesson, art style
 - **/book** – Flip-book viewer with read aloud and PDF download
+- **/admin** – Admin portal (requires `ADMIN_EMAILS`). View usage stats, subscription tiers, and customer feedback.
 
 ## COPPA Compliance
 

@@ -65,8 +65,9 @@ export function validateCreatePayload(body: unknown): ValidationResult {
 
   const dedication = b.dedication;
   if (dedication != null && typeof dedication === "object") {
-    const msg = typeof dedication.message === "string" ? dedication.message : "";
-    const from = typeof dedication.from === "string" ? dedication.from : "";
+    const d = dedication as Record<string, unknown>;
+    const msg = typeof d.message === "string" ? d.message : "";
+    const from = typeof d.from === "string" ? d.from : "";
     if (msg.length > 200) {
       return { ok: false, error: "Dedication message must be 200 characters or less." };
     }

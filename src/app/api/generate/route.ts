@@ -515,10 +515,19 @@ export async function POST(request: NextRequest) {
           dedication: dedicationData ?? undefined,
         };
 
+        const profile = await getUserProfile(userId);
+        const subscriptionTierAtCreation = profile?.subscriptionTier ?? "free";
+
         if (updateBookId) {
           await replaceBook(bookId, userId, savedBook, creationMetadata);
         } else {
-          await saveBookToSupabase(userId, savedBook, bookId, creationMetadata);
+          await saveBookToSupabase(
+            userId,
+            savedBook,
+            bookId,
+            creationMetadata,
+            subscriptionTierAtCreation
+          );
         }
 
         await insertBookUsageEvent(userId, bookId);

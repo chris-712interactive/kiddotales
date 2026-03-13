@@ -389,7 +389,8 @@ export async function saveBookToSupabase(
   userId: string,
   book: BookData,
   bookId?: string,
-  creationMetadata?: CreationMetadata | null
+  creationMetadata?: CreationMetadata | null,
+  subscriptionTierAtCreation?: string | null
 ): Promise<string> {
   const supabase = createSupabaseAdmin();
   const row = {
@@ -401,6 +402,7 @@ export async function saveBookToSupabase(
     cover_image_data: book.coverImageData || null,
     pages: book.pages,
     creation_metadata: creationMetadata ?? null,
+    subscription_tier_at_creation: subscriptionTierAtCreation ?? null,
   };
   const { data, error } = await supabase
     .from("books")

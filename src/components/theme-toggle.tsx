@@ -6,7 +6,12 @@ import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export function ThemeToggle({ className }: { className?: string }) {
+interface ThemeToggleProps {
+  className?: string;
+  variant?: "default" | "drawer";
+}
+
+export function ThemeToggle({ className, variant = "default" }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const { data: session } = useSession();
 
@@ -22,6 +27,24 @@ export function ThemeToggle({ className }: { className?: string }) {
       }).catch(() => {});
     }
   };
+
+  if (variant === "drawer") {
+    return (
+      <Button
+        variant="ghost"
+        className={cn("w-full justify-start", className)}
+        onClick={handleToggle}
+        aria-label="Toggle theme"
+      >
+        {theme === "light" ? (
+          <Moon className="mr-2 size-4" />
+        ) : (
+          <Sun className="mr-2 size-4" />
+        )}
+        {theme === "light" ? "Dark mode" : "Light mode"}
+      </Button>
+    );
+  }
 
   return (
     <Button

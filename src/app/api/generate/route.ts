@@ -65,7 +65,7 @@ function buildAppearancePrefix(
   if (a.glasses) parts.push("wearing glasses");
   if (a.freckles) parts.push("freckles");
 
-  return parts.join(", ") + ", children's book illustration style.";
+  return parts.join(", ") + ", human ears, no animal features, children's book illustration style.";
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -159,7 +159,8 @@ export async function POST(request: NextRequest) {
       artStyle,
       appearance,
       preferredVoice,
-    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string } & typeof body;
+      dedication,
+    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string } } & typeof body;
 
     const validation = validateCreatePayload(body);
     if (!validation.ok) {
@@ -304,7 +305,13 @@ export async function POST(request: NextRequest) {
       throw new Error("No story content from OpenAI");
     }
 
-    let parsed: { title: string; pages: BookPage[]; coverImagePrompt?: string; characterDescription?: string };
+    let parsed: {
+      title: string;
+      pages: BookPage[];
+      coverImagePrompt?: string;
+      characterDescription?: string;
+      secondaryCharacterDescription?: string | null;
+    };
     try {
       parsed = JSON.parse(content);
     } catch {
@@ -339,10 +346,17 @@ export async function POST(request: NextRequest) {
     console.log("[KiddoTales] OpenAI done, starting Replicate (cover + 8 images, throttled)...");
     let coverImageUrl = "";
 
+    const secondaryChar =
+      parsed.secondaryCharacterDescription?.trim() || null;
+
+    const antiHybridSuffix =
+      " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
-    const fullCoverPrompt = `${characterPrefix}. ${coverPrompt}. ${styleSuffix}`;
+    const fullCoverPrompt = secondaryChar
+      ? `${characterPrefix}. The child and creature are two separate beings. ${secondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`
+      : `${characterPrefix}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`;
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
@@ -377,7 +391,12 @@ export async function POST(request: NextRequest) {
       }
       const page = parsed.pages[i];
       const promptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
-      const fullPrompt = `${characterPrefix}. ${promptText}. ${styleSuffix}`;
+      const includeSecondary =
+        secondaryChar && page.secondaryCharacterInScene === true;
+      const scenePart = includeSecondary
+        ? `${characterPrefix}. The child and creature are two separate beings. ${secondaryChar}. ${promptText}. ${styleSuffix}`
+        : `${characterPrefix}. ${promptText}. ${styleSuffix}`;
+      const fullPrompt = `${scenePart}. ${antiHybridSuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const output = await replicate.run(
@@ -409,6 +428,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const dedicationData =
+      dedication &&
+      typeof dedication === "object" &&
+      (dedication.message?.trim() || dedication.from?.trim())
+        ? {
+            message: (dedication.message ?? "").trim().slice(0, 200),
+            from: (dedication.from ?? "").trim().slice(0, 80),
+          }
+        : undefined;
+
     const createdAt = new Date().toISOString();
     let book: BookData = {
       title: parsed.title,
@@ -417,6 +446,7 @@ export async function POST(request: NextRequest) {
         imageUrl: imageUrls[i] || undefined,
       })),
       createdAt,
+      dedication: dedicationData,
       coverImageUrl: coverImageUrl || undefined,
     };
 
@@ -470,6 +500,7 @@ export async function POST(request: NextRequest) {
           artStyle: artStyle || "whimsical-watercolor",
           appearance: appearance || {},
           preferredVoice: preferredVoice && preferredVoice !== "none" ? preferredVoice : "none",
+          dedication: dedicationData ?? undefined,
         };
 
         if (updateBookId) {

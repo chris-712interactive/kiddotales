@@ -29,8 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { AuthButtons } from "@/components/auth-buttons";
+import { AppHeader } from "@/components/app-header";
 import { LoadingScreen } from "@/components/loading-screen";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -137,6 +136,7 @@ function CreatePageContent() {
     artStyle: "whimsical-watercolor",
     appearance: {},
     preferredVoice: "none",
+    dedication: undefined,
   });
 
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
@@ -524,28 +524,16 @@ function CreatePageContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-        <Image
-            src="/branding/logo.svg"
-            alt="KiddoTales"
-            width={32}
-            height={32}
-            className="size-8 object-contain"
-          />
-          <span className="text-xl font-bold">KiddoTales</span>
-        </Link>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+      <AppHeader
+        pageActions={
           <Link href="/">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
               <ArrowLeft className="size-4 sm:mr-1" />
               <span className="hidden sm:inline">Back</span>
             </Button>
           </Link>
-          <AuthButtons />
-          <ThemeToggle />
-        </div>
-      </header>
+        }
+      />
 
       <main className="mx-auto max-w-2xl px-4 pb-24 sm:pb-16">
         <motion.div
@@ -625,6 +613,48 @@ function CreatePageContent() {
                         I am a parent or guardian creating a story for my child.
                       </span>
                     </label>
+
+                    <div className="space-y-3 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+                      <div>
+                        <Label className="text-muted-foreground">Special message (optional)</Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Add a personal message that appears at the beginning of the book, right after the cover. No voice-over.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="e.g. To our little Luna, with love"
+                          value={form.dedication?.message ?? ""}
+                          onChange={(e) => {
+                            const msg = e.target.value;
+                            setForm((prev) => ({
+                              ...prev,
+                              dedication: msg.trim() || (prev.dedication?.from ?? "").trim()
+                                ? { message: msg, from: prev.dedication?.from ?? "" }
+                                : undefined,
+                            }));
+                          }}
+                          maxLength={200}
+                          className="bg-background"
+                        />
+                        <Input
+                          placeholder="From (e.g. Mom & Dad)"
+                          value={form.dedication?.from ?? ""}
+                          onChange={(e) => {
+                            const fromVal = e.target.value;
+                            setForm((prev) => ({
+                              ...prev,
+                              dedication: (prev.dedication?.message ?? "").trim() || fromVal.trim()
+                                ? { message: prev.dedication?.message ?? "", from: fromVal }
+                                : undefined,
+                            }));
+                          }}
+                          maxLength={80}
+                          className="bg-background"
+                        />
+                      </div>
+                    </div>
+
                     {profiles.length > 0 ? (
                       <div className="space-y-2">
                         <Label>Use a saved profile (optional)</Label>

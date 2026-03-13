@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield } from "lucide-react";
+import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,8 +16,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { AuthButtons } from "@/components/auth-buttons";
+import { AppHeader } from "@/components/app-header";
+import { FeedbackTrigger } from "@/components/feedback-trigger";
 import { toast } from "sonner";
 
 type SettingsData = {
@@ -195,19 +195,16 @@ function SettingsContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-        <header className="flex items-center justify-between px-4 py-4 md:px-8">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/branding/logo.svg"
-              alt="KiddoTales"
-              width={32}
-              height={32}
-              className="size-8 object-contain"
-            />
-            <span className="text-xl font-bold text-foreground">KiddoTales</span>
-          </Link>
-          <ThemeToggle />
-        </header>
+        <AppHeader
+          pageActions={
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Home">
+                <ArrowLeft className="size-4 sm:mr-1" />
+                <span className="hidden sm:inline">Home</span>
+              </Button>
+            </Link>
+          }
+        />
         <main className="mx-auto max-w-2xl px-4 py-12">
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Sparkles className="size-5 animate-pulse" />
@@ -221,19 +218,16 @@ function SettingsContent() {
   if (!data) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
-        <header className="flex items-center justify-between px-4 py-4 md:px-8">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/branding/logo.svg"
-              alt="KiddoTales"
-              width={32}
-              height={32}
-              className="size-8 object-contain"
-            />
-            <span className="text-xl font-bold text-foreground">KiddoTales</span>
-          </Link>
-          <ThemeToggle />
-        </header>
+        <AppHeader
+          pageActions={
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Home">
+                <ArrowLeft className="size-4 sm:mr-1" />
+                <span className="hidden sm:inline">Home</span>
+              </Button>
+            </Link>
+          }
+        />
         <main className="mx-auto max-w-2xl px-4 py-12 text-center">
           <p className="text-muted-foreground">Could not load settings.</p>
           <Link href="/">
@@ -250,28 +244,16 @@ function SettingsContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <Image
-            src="/branding/logo.svg"
-            alt="KiddoTales"
-            width={32}
-            height={32}
-            className="size-8 object-contain"
-          />
-          <span className="text-xl font-bold text-foreground">KiddoTales</span>
-        </Link>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+      <AppHeader
+        pageActions={
           <Link href="/">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Home">
               <ArrowLeft className="size-4 sm:mr-1" />
               <span className="hidden sm:inline">Home</span>
             </Button>
           </Link>
-          <AuthButtons />
-          <ThemeToggle />
-        </div>
-      </header>
+        }
+      />
 
       <main className="mx-auto max-w-2xl px-4 pb-16 pt-4 md:px-8">
         <motion.div
@@ -492,6 +474,22 @@ function SettingsContent() {
               <Link href="/privacy" className="inline-block text-sm text-primary underline hover:no-underline">
                 Privacy Policy
               </Link>
+            </CardContent>
+          </Card>
+
+          {/* Feedback */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="size-5" />
+                Feedback
+              </CardTitle>
+              <CardDescription>
+                Help us improve KiddoTales. Share your thoughts, report bugs, or suggest features.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FeedbackTrigger variant="button" />
             </CardContent>
           </Card>
         </motion.div>

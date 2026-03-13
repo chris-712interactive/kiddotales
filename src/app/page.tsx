@@ -14,10 +14,10 @@ import {
   Loader2,
   ExternalLink,
   Volume2,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { AuthButtons } from "@/components/auth-buttons";
+import { AppHeader } from "@/components/app-header";
 import { getBookHistory } from "@/lib/storage";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -59,6 +59,7 @@ type DashboardData = {
   nextBillingDate: string | null;
   cancelAtPeriodEnd?: boolean;
   displayName?: string | null;
+  isAdmin?: boolean;
 };
 
 function DashboardView({
@@ -125,11 +126,19 @@ function DashboardView({
             Plans & pricing
           </Button>
         </Link>
+        {data.isAdmin && (
+          <Link href="/admin">
+            <Button variant="outline" size="sm">
+              <Shield className="mr-1 size-4" />
+              Admin
+            </Button>
+          </Link>
+        )}
       </motion.section>
 
       {/* Stats cards */}
       <motion.section
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        className="grid gap-4 sm:grid-cols-3"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
@@ -175,7 +184,7 @@ function DashboardView({
           </p>
         </div>
 
-        <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-md sm:col-span-2 lg:col-span-1">
+        <div className="rounded-2xl border-2 border-border bg-card p-5 shadow-md">
           <div className="mb-2 flex items-center gap-2 text-muted-foreground">
             <Calendar className="size-5" />
             <span className="text-sm font-medium">
@@ -347,6 +356,7 @@ export default function LandingPage() {
               nextBillingDate: res.nextBillingDate ?? null,
               cancelAtPeriodEnd: res.cancelAtPeriodEnd ?? false,
               displayName: res.profile?.displayName ?? res.profile?.name ?? null,
+              isAdmin: res.isAdmin ?? false,
             });
           }
         })
@@ -371,28 +381,13 @@ export default function LandingPage() {
           subscriptionTier: "free",
           nextBillingDate: null,
           cancelAtPeriodEnd: false,
+          isAdmin: false,
         }
       : null);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <Image
-            src="/branding/logo.svg"
-            alt="KiddoTales"
-            width={32}
-            height={32}
-            className="size-8 object-contain"
-          />
-          <span className="text-xl font-bold text-foreground">KiddoTales</span>
-        </Link>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          <AuthButtons />
-          <ThemeToggle />
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 md:px-8">
         {showDashboard ? (

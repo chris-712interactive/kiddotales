@@ -474,14 +474,18 @@ export async function getBookById(
 
   if (error || !data) return null;
 
+  const creationMetadata = (data.creation_metadata as CreationMetadata) || undefined;
+  const dedication = creationMetadata?.dedication;
+
   return {
     id: data.id,
     title: data.title,
     pages: data.pages as BookData["pages"],
     createdAt: data.created_at,
+    dedication: dedication || undefined,
     coverImageUrl: data.cover_image_url || undefined,
     coverImageData: data.cover_image_data || undefined,
-    creationMetadata: (data.creation_metadata as CreationMetadata) || undefined,
+    creationMetadata,
   };
 }
 
@@ -605,6 +609,22 @@ export async function revokeParentConsent(userId: string): Promise<void> {
     parent_consent_version: null,
     updated_at: new Date().toISOString(),
   }).eq("id", userId);
+}
+
+/** Insert customer feedback. userId and email may be null for anonymous submissions. */
+export async function insertFeedback(params: {
+  userId?: string | null;
+  email?: string | null;
+  message: string;
+  category?: string | null;
+}): Promise<void> {
+  const supabase = createSupabaseAdmin();
+  await supabase.from("feedback").insert({
+    user_id: params.userId ?? null,
+    email: params.email ?? null,
+    message: params.message.trim(),
+    category: params.category ?? null,
+  });
 }
 
 /** Delete a single book by ID. Caller must verify userId owns the book. Does not affect usage count. */

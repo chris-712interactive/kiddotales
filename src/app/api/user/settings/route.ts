@@ -9,6 +9,7 @@ import {
   getBookLimitForUser,
 } from "@/lib/db";
 import { getStripe, getVoiceLimitForTier, getVoicesForTier } from "@/lib/stripe";
+import { isAdminEmail } from "@/lib/admin";
 
 export async function GET() {
   const session = await auth();
@@ -80,6 +81,7 @@ export async function GET() {
       nextBillingDate,
       subscriptionStatus,
       cancelAtPeriodEnd,
+      isAdmin: isAdminEmail(session.user.email ?? null),
     });
   } catch (e) {
     console.error("GET /api/user/settings:", e);

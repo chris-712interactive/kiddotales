@@ -1,31 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppHeader } from "@/components/app-header";
 
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <Image
-            src="/branding/logo.svg"
-            alt="KiddoTales"
-            width={32}
-            height={32}
-            className="size-8 object-contain"
-          />
-          <span className="text-xl font-bold text-foreground">KiddoTales</span>
-        </Link>
-        <Link href="/">
-          <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
-            <ArrowLeft className="size-4 sm:mr-1" />
-            <span className="hidden sm:inline">Back</span>
-          </Button>
-        </Link>
-      </header>
+      <AppHeader
+        pageActions={
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
+              <ArrowLeft className="size-4 sm:mr-1" />
+              <span className="hidden sm:inline">Back</span>
+            </Button>
+          </Link>
+        }
+      />
 
       <main className="mx-auto max-w-2xl px-4 pb-16 pt-4 md:px-8">
         <article className="prose prose-neutral dark:prose-invert max-w-none">

@@ -63,5 +63,18 @@ export function validateCreatePayload(body: unknown): ValidationResult {
     return { ok: false, error: "Pronouns must be 30 characters or less." };
   }
 
+  const dedication = b.dedication;
+  if (dedication != null && typeof dedication === "object") {
+    const d = dedication as Record<string, unknown>;
+    const msg = typeof d.message === "string" ? d.message : "";
+    const from = typeof d.from === "string" ? d.from : "";
+    if (msg.length > 200) {
+      return { ok: false, error: "Dedication message must be 200 characters or less." };
+    }
+    if (from.length > 80) {
+      return { ok: false, error: "Dedication 'from' must be 80 characters or less." };
+    }
+  }
+
   return { ok: true };
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -20,8 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { AuthButtons } from "@/components/auth-buttons";
+import { AppHeader } from "@/components/app-header";
 import { toast } from "sonner";
 import { PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
 
@@ -115,28 +113,16 @@ export default function ManageBooksPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <Image
-            src="/branding/logo.svg"
-            alt="KiddoTales"
-            width={32}
-            height={32}
-            className="size-8 object-contain"
-          />
-          <span className="text-xl font-bold text-foreground">KiddoTales</span>
-        </Link>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+      <AppHeader
+        pageActions={
           <Link href="/settings">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Settings">
               <ArrowLeft className="size-4 sm:mr-1" />
               <span className="hidden sm:inline">Settings</span>
             </Button>
           </Link>
-          <AuthButtons />
-          <ThemeToggle />
-        </div>
-      </header>
+        }
+      />
 
       <main className="mx-auto max-w-2xl px-4 pb-16 pt-4 md:px-8">
         <motion.div

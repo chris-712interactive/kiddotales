@@ -77,6 +77,13 @@ const ART_STYLE_CARDS = [
     gradient: "from-green-200 to-teal-200 dark:from-green-900/30 dark:to-teal-900/30",
     image: "/artStyles/vibrantCartoon.png",
   },
+  {
+    id: "photo-realistic",
+    label: "Photo Realistic",
+    description: "Lifelike & cinematic",
+    gradient: "from-slate-300 to-slate-500 dark:from-slate-700 dark:to-slate-900",
+    image: undefined,
+  },
 ];
 
 const SURPRISE_EXAMPLES: CreateFormData[] = [

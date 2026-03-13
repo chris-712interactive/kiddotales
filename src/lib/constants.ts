@@ -44,6 +44,7 @@ export const getStoryUserPrompt = (params: {
     "pixar-3d": "Pixar-style 3D CGI, vibrant and expressive",
     "hand-drawn-classic": "classic hand-drawn storybook style like vintage children's books",
     "vibrant-cartoon": "bright, bold cartoon style with clean lines",
+    "photo-realistic": "photorealistic illustrations with natural lighting and lifelike detail",
   };
 
   const appearanceParts: string[] = [];
@@ -57,6 +58,10 @@ export const getStoryUserPrompt = (params: {
     appearanceParts.length > 0
       ? `\n- Character appearance (use in characterDescription): ${appearanceParts.join(", ")}`
       : "";
+  const photoRealisticHint =
+    params.artStyle === "photo-realistic"
+      ? "\n- For photorealistic art style: characterDescription and secondaryCharacterDescription must be very detailed (e.g. skin tone nuances, hair texture, eye shape, natural proportions, fabric detail) so images render lifelike."
+      : "";
 
   return `Create a personalized bedtime story with these details:
 
@@ -65,7 +70,7 @@ export const getStoryUserPrompt = (params: {
 - Pronouns: ${params.pronouns}
 - Interests: ${params.interests.join(", ")}
 - Life lesson to teach: ${params.lifeLesson}
-- Art style for images: ${artStyleDescriptions[params.artStyle] || params.artStyle}${appearanceLine}
+- Art style for images: ${artStyleDescriptions[params.artStyle] || params.artStyle}${appearanceLine}${photoRealisticHint}
 
 Generate the complete story as JSON. Remember: exactly 8 pages, each with text and a detailed imagePrompt.`;
 };
@@ -79,6 +84,8 @@ export const ART_STYLE_PROMPTS: Record<string, string> = {
     "Children's book illustration, classic hand-drawn style, vintage storybook aesthetic, warm colors, detailed linework",
   "vibrant-cartoon":
     "Children's book illustration, bright bold cartoon style, clean lines, saturated colors, fun and playful",
+  "photo-realistic":
+    "Photorealistic children's book illustration, professional photography style, soft natural lighting, warm and inviting, lifelike detail, realistic skin and hair texture, natural character proportions, cinematic quality, high resolution",
 };
 
 export const BOOK_HISTORY_KEY = "kiddotales-book-history";

@@ -43,6 +43,7 @@ const ART_STYLE_OPTIONS = [
   { value: "pixar-3d", label: "Pixar-style 3D" },
   { value: "hand-drawn-classic", label: "Hand-drawn Classic" },
   { value: "vibrant-cartoon", label: "Vibrant Cartoon" },
+  { value: "photo-realistic", label: "Photo Realistic" },
 ];
 
 type BookWithMeta = {

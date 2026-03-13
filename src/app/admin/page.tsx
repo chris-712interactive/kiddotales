@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -26,13 +36,70 @@ import {
 } from "@/components/ui/card";
 import { AppHeader } from "@/components/app-header";
 
+type BooksByTierDay = { date: string } & Record<string, number>;
+
 type AdminStats = {
   users: { total: number; newThisMonth: number };
   books: { total: number; thisMonth: number };
   tiers: Record<string, number>;
+  booksByTierLast30Days: BooksByTierDay[];
   feedback: { total: number; recent: { id: string; message: string; category: string | null; email: string | null; createdAt: string }[] };
   childProfiles: number;
 };
+
+function BooksByTierLineChart({
+  data,
+  tierOrder,
+  tierLabels,
+}: {
+  data: BooksByTierDay[];
+  tierOrder: string[];
+  tierLabels: Record<string, string>;
+}) {
+  const hasData = data.some((d) => tierOrder.some((t) => (d[t] ?? 0) > 0));
+  if (!hasData) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        No books created in the last 30 days.
+      </p>
+    );
+  }
+
+  const colors = ["hsl(var(--primary))", "#f59e0b", "#8b5cf6", "#ec4899"];
+  return (
+    <div className="h-64 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis
+            dataKey="date"
+            tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            className="text-xs"
+          />
+          <YAxis allowDecimals={false} className="text-xs" />
+          <Tooltip
+            labelFormatter={(v) => new Date(v).toLocaleDateString()}
+            formatter={(value: number) => [value, "Books"]}
+            labelStyle={{ color: "hsl(var(--foreground))" }}
+          />
+          <Legend />
+          {tierOrder.map((tier, i) => (
+            <Line
+              key={tier}
+              type="monotone"
+              dataKey={tier}
+              name={tierLabels[tier] ?? tier}
+              stroke={colors[i % colors.length]}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              connectNulls
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -185,6 +252,17 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </section>
+
+          {/* Book creation by license (last 30 days) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Books created by license type</CardTitle>
+              <CardDescription>Last 30 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BooksByTierLineChart data={stats.booksByTierLast30Days ?? []} tierOrder={tierOrder} tierLabels={tierLabels} />
+            </CardContent>
+          </Card>
 
           {/* Subscription tiers */}
           <Card>

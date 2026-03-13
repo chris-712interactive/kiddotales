@@ -19,6 +19,9 @@ export async function getAdminStats() {
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const monthStartStr = monthStart.toISOString();
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
 
   // Users
   const { count: totalUsers } = await supabase
@@ -63,6 +66,30 @@ export async function getAdminStats() {
     .from("child_profiles")
     .select("*", { count: "exact", head: true });
 
+  // Books by subscription tier by day (last 30 days) - for line chart
+  const { data: booksLast30 } = await supabase
+    .from("books")
+    .select("created_at, users!inner(subscription_tier)")
+    .gte("created_at", thirtyDaysAgoStr);
+  const tierOrder = ["free", "spark", "magic", "legend"];
+  const byDate: Record<string, Record<string, number>> = {};
+  for (let d = 0; d <= 30; d++) {
+    const day = new Date(now);
+    day.setDate(day.getDate() - (30 - d));
+    const key = day.toISOString().slice(0, 10);
+    byDate[key] = Object.fromEntries(tierOrder.map((t) => [t, 0]));
+  }
+  for (const row of booksLast30 ?? []) {
+    const tier = (row.users as { subscription_tier?: string } | null)?.subscription_tier ?? "free";
+    const key = (row.created_at as string).slice(0, 10);
+    if (byDate[key] && (tierOrder.includes(tier) || tier)) {
+      byDate[key][tier] = (byDate[key][tier] ?? 0) + 1;
+    }
+  }
+  const booksByTierLast30Days = Object.entries(byDate)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, counts]) => ({ date, ...counts }));
+
   return {
     users: {
       total: totalUsers ?? 0,
@@ -73,6 +100,7 @@ export async function getAdminStats() {
       thisMonth: booksThisMonth ?? 0,
     },
     tiers: tierCounts,
+    booksByTierLast30Days,
     feedback: {
       total: totalFeedback ?? 0,
       recent: (recentFeedback ?? []).map((f) => ({

@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeSync } from "@/components/theme-sync";
 import { AuthSessionProvider } from "@/components/session-provider";
 import { Footer } from "@/components/footer";
+import { GoogleAnalytics } from "@/components/google-analytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -67,6 +68,7 @@ export default function RootLayout({
             }}
           />
           <Analytics />
+          <GoogleAnalytics />
           </ThemeProvider>
         </AuthSessionProvider>
       </body>

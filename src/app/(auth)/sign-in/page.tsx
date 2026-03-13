@@ -8,7 +8,7 @@ import Image from "next/image";
 
 function SignInContent() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/create";
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] p-4">

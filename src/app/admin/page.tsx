@@ -25,6 +25,9 @@ import {
   UserPlus,
   Loader2,
   Shield,
+  DollarSign,
+  Banknote,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -253,6 +256,45 @@ export default function AdminPage() {
                 </p>
               </CardContent>
             </Card>
+            <Link href="/admin/affiliates">
+              <Card className="transition-colors hover:border-primary/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <DollarSign className="size-5" />
+                    Affiliates
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Manage affiliates & commissions</p>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/admin/payouts">
+              <Card className="transition-colors hover:border-primary/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Banknote className="size-5" />
+                    Payouts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Reconcile paid vs unpaid by affiliate</p>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/admin/tax-forms">
+              <Card className="transition-colors hover:border-primary/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="size-5" />
+                    W-9s
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Collect and verify W-9 tax forms</p>
+                </CardContent>
+              </Card>
+            </Link>
           </section>
 
           {/* Book creation by license (last 30 days) */}

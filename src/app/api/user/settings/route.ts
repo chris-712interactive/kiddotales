@@ -10,6 +10,7 @@ import {
 } from "@/lib/db";
 import { getStripe, getVoiceLimitForTier, getVoicesForTier } from "@/lib/stripe";
 import { isAdminEmail } from "@/lib/admin";
+import { getAffiliateByUserId } from "@/lib/affiliates";
 
 export async function GET() {
   const session = await auth();
@@ -32,9 +33,10 @@ export async function GET() {
       );
     }
 
-    const [bookCount, voiceCount] = await Promise.all([
+    const [bookCount, voiceCount, affiliate] = await Promise.all([
       getUserBookCountByPeriod(userId, limitConfig.period),
       getUserVoiceCountByPeriod(userId, limitConfig.period),
+      getAffiliateByUserId(userId),
     ]);
 
     const voiceLimit = getVoiceLimitForTier(profile.subscriptionTier);
@@ -82,6 +84,7 @@ export async function GET() {
       subscriptionStatus,
       cancelAtPeriodEnd,
       isAdmin: isAdminEmail(session.user.email ?? null),
+      isAffiliate: !!affiliate,
     });
   } catch (e) {
     console.error("GET /api/user/settings:", e);

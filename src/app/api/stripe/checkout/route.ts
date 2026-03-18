@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getStripe } from "@/lib/stripe";
 import { getTierFromPriceId } from "@/lib/stripe";
 import { ensureUser, getUserProfile } from "@/lib/db";
+import { getAffiliateByCode, getAffiliateById } from "@/lib/affiliates";
 
 /** Create Stripe Checkout Session for subscription (server-side, secure). */
 export async function POST(req: NextRequest) {
@@ -22,14 +23,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { priceId: string };
+  let body: { priceId: string; affiliateCode?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { priceId } = body;
+  const { priceId, affiliateCode } = body;
   if (!priceId || typeof priceId !== "string") {
     return NextResponse.json(
       { error: "priceId is required" },
@@ -130,6 +131,17 @@ export async function POST(req: NextRequest) {
     const successUrl = `${baseUrl}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl}/pricing?canceled=true`;
 
+    const metadata: Record<string, string> = { userId, tier };
+    let affiliate = affiliateCode?.trim()
+      ? await getAffiliateByCode(affiliateCode.trim())
+      : null;
+    if (!affiliate && profile?.referredByAffiliateId) {
+      affiliate = await getAffiliateById(profile.referredByAffiliateId);
+    }
+    if (affiliate && affiliate.userId !== userId && affiliate.active) {
+      metadata.affiliateCode = affiliate.code;
+    }
+
     const sessionParams: {
       mode: "subscription";
       customer_email?: string;
@@ -137,16 +149,16 @@ export async function POST(req: NextRequest) {
       line_items: { price: string; quantity: number }[];
       success_url: string;
       cancel_url: string;
-      metadata: { userId: string; tier: string };
-      subscription_data?: { metadata: { userId: string; tier: string } };
+      metadata: Record<string, string>;
+      subscription_data?: { metadata: Record<string, string> };
       allow_promotion_codes?: boolean;
     } = {
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { userId, tier },
-      subscription_data: { metadata: { userId, tier } },
+      metadata,
+      subscription_data: { metadata },
       allow_promotion_codes: true,
     };
 

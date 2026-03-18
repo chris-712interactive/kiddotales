@@ -17,6 +17,10 @@ export function Footer() {
         <span className="hidden sm:inline">·</span>
         <FeedbackTrigger variant="link" />
         <span className="hidden sm:inline">·</span>
+        <Link href="/affiliate" className="underline hover:text-foreground">
+          Affiliate program
+        </Link>
+        <span className="hidden sm:inline">·</span>
         <span>© {new Date().getFullYear()} KiddoTales</span>
       </div>
     </footer>

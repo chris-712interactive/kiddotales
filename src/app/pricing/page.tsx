@@ -18,6 +18,7 @@ import { SUBSCRIPTION_TIERS, getTierRank } from "@/lib/stripe";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { getAffiliateCode } from "@/components/affiliate-ref-capture";
 
 const TIER_ICONS: Record<string, React.ReactNode> = {
   free: <Sparkles className="size-5" />,
@@ -51,6 +52,15 @@ export default function PricingPage() {
           setCurrentTier("free");
         })
         .finally(() => setSubscriptionLoading(false));
+      const code = getAffiliateCode();
+      if (code) {
+        fetch("/api/user/affiliate-attribution", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ affiliateCode: code }),
+          credentials: "include",
+        }).catch(() => {});
+      }
     } else {
       setCurrentTier(null);
       setSubscriptionLoading(false);
@@ -101,11 +111,12 @@ export default function PricingPage() {
         return;
       }
 
-      // New subscribers: use checkout
+      // New subscribers: use checkout (include affiliate code if present)
+      const affiliateCode = getAffiliateCode();
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId }),
+        body: JSON.stringify({ priceId, affiliateCode: affiliateCode ?? undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Checkout failed");

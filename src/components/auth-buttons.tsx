@@ -1,9 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Bell, Settings, LogOut, BookMarked } from "lucide-react";
+import { Bell, Settings, LogOut, BookMarked, Link2 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 
 interface AuthButtonsProps {
@@ -13,6 +14,15 @@ interface AuthButtonsProps {
 
 export function AuthButtons({ variant = "default", setOpen }: AuthButtonsProps) {
   const { data: session, status } = useSession();
+  const [isAffiliate, setIsAffiliate] = useState(false);
+
+  useEffect(() => {
+    if (variant !== "drawer" || !session?.user?.id) return;
+    fetch("/api/user/affiliate")
+      .then((r) => r.json())
+      .then((d) => setIsAffiliate(!!d?.affiliate))
+      .catch(() => {});
+  }, [variant, session?.user?.id]);
 
   if (status === "loading") {
     return <span className="text-sm text-muted-foreground">...</span>;
@@ -45,6 +55,14 @@ export function AuthButtons({ variant = "default", setOpen }: AuthButtonsProps) 
               Settings
             </Button>
           </Link>
+          {isAffiliate && (
+            <Link href="/affiliate" className="block w-full" onClick={() => setOpen?.(false)}>
+              <Button variant="ghost" className="w-full justify-start">
+                <Link2 className="mr-2 size-4" />
+                Affiliate
+              </Button>
+            </Link>
+          )}
           <ThemeToggle variant="drawer" />
           <Button
             variant="ghost"

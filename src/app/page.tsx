@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Volume2,
   Shield,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/app-header";
@@ -60,6 +61,7 @@ type DashboardData = {
   cancelAtPeriodEnd?: boolean;
   displayName?: string | null;
   isAdmin?: boolean;
+  isAffiliate?: boolean;
 };
 
 function DashboardView({
@@ -126,6 +128,14 @@ function DashboardView({
             Plans & pricing
           </Button>
         </Link>
+        {data.isAffiliate && (
+          <Link href="/affiliate">
+            <Button variant="outline" size="sm">
+              <Link2 className="mr-1 size-4" />
+              Affiliate
+            </Button>
+          </Link>
+        )}
         {data.isAdmin && (
           <Link href="/admin">
             <Button variant="outline" size="sm">
@@ -357,6 +367,7 @@ export default function LandingPage() {
               cancelAtPeriodEnd: res.cancelAtPeriodEnd ?? false,
               displayName: res.profile?.displayName ?? res.profile?.name ?? null,
               isAdmin: res.isAdmin ?? false,
+              isAffiliate: res.isAffiliate ?? false,
             });
           }
         })
@@ -382,6 +393,7 @@ export default function LandingPage() {
           nextBillingDate: null,
           cancelAtPeriodEnd: false,
           isAdmin: false,
+          isAffiliate: false,
         }
       : null);
 

@@ -20,6 +20,7 @@ export type UserProfile = {
   parentConsentVersion?: string | null;
   tierUpgradeAt?: string | null;
   tierBeforeUpgrade?: string | null;
+  referredByAffiliateId?: string | null;
   createdAt: string;
   updatedAt: string | null;
 };
@@ -38,7 +39,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, parent_consent_at, parent_consent_version, tier_upgrade_at, tier_before_upgrade, created_at, updated_at")
+    .select("id, email, display_name, phone, subscription_tier, theme, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, parent_consent_at, parent_consent_version, tier_upgrade_at, tier_before_upgrade, referred_by_affiliate_id, created_at, updated_at")
     .eq("id", userId)
     .single();
 
@@ -60,6 +61,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     parentConsentVersion: data.parent_consent_version ?? null,
     tierUpgradeAt: data.tier_upgrade_at ?? null,
     tierBeforeUpgrade: data.tier_before_upgrade ?? null,
+    referredByAffiliateId: data.referred_by_affiliate_id ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at ?? null,
   };

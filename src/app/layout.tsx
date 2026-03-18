@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "sonner";
@@ -9,6 +10,8 @@ import { ThemeSync } from "@/components/theme-sync";
 import { AuthSessionProvider } from "@/components/session-provider";
 import { Footer } from "@/components/footer";
 import { GoogleAnalytics } from "@/components/google-analytics";
+import { AffiliateRefCapture } from "@/components/affiliate-ref-capture";
+import { AffiliateAttribution } from "@/components/affiliate-attribution";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +52,10 @@ export default function RootLayout({
         <AuthSessionProvider>
           <ThemeProvider defaultTheme="light" storageKey="kiddotales-theme">
             <ThemeSync />
+            <Suspense fallback={null}>
+              <AffiliateRefCapture />
+              <AffiliateAttribution />
+            </Suspense>
             <a href="#main" className="sr-only skip-link">
               Skip to main content
             </a>

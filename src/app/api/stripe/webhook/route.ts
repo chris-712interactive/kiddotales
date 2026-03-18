@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe, getTierFromPriceId } from "@/lib/stripe";
-import { updateSubscriptionFromStripe } from "@/lib/db";
+import { updateSubscriptionFromStripe, getUserProfile } from "@/lib/db";
+import {
+  getAffiliateByCode,
+  getAffiliateById,
+  computeCommission,
+  createCommission,
+  setUserReferredBy,
+  hasCommissionForSubscription,
+} from "@/lib/affiliates";
 
 /** Stripe webhook handler. Must use raw body for signature verification. */
 export async function POST(req: NextRequest) {
@@ -66,6 +74,46 @@ export async function POST(req: NextRequest) {
           stripePriceId: priceId,
           subscriptionTier: tier ?? "spark",
         });
+
+        let affiliateCode = (session.metadata?.affiliateCode as string | undefined) ?? (sub.metadata?.affiliateCode as string | undefined);
+        if (affiliateCode) {
+          try {
+            const affiliate = await getAffiliateByCode(affiliateCode);
+            if (affiliate && affiliate.userId !== userId) {
+              await setUserReferredBy(userId, affiliate.id);
+              const exists = await hasCommissionForSubscription(sub.id, "first_payment");
+              if (!exists) {
+                let amountCents = 0;
+                if (session.invoice) {
+                  const inv = await stripe.invoices.retrieve(session.invoice as string);
+                  amountCents = inv.amount_paid ?? 0;
+                }
+                if (amountCents <= 0 && sub.latest_invoice) {
+                  const invId = typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id;
+                  if (invId) {
+                    const inv = await stripe.invoices.retrieve(invId);
+                    amountCents = inv.amount_paid ?? 0;
+                  }
+                }
+                if (amountCents > 0) {
+                  const commissionAmount = computeCommission(affiliate, amountCents, "first_payment");
+                  if (commissionAmount > 0) {
+                    await createCommission({
+                      affiliateId: affiliate.id,
+                      userId,
+                      subscriptionId: sub.id,
+                      amount: commissionAmount,
+                      transactionAmount: amountCents / 100,
+                      type: "first_payment",
+                    });
+                  }
+                }
+              }
+            }
+          } catch (affErr) {
+            console.warn("[Stripe webhook] Affiliate commission error:", affErr);
+          }
+        }
         break;
       }
 
@@ -136,6 +184,72 @@ export async function POST(req: NextRequest) {
           tierUpgradeAt: null,
           tierBeforeUpgrade: null,
         });
+        break;
+      }
+
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const subId = typeof invoice.parent?.subscription_details?.subscription === "string" ? invoice.parent?.subscription_details?.subscription : invoice.parent?.subscription_details?.subscription?.id;
+        if (!subId) break;
+
+        const sub = await stripe.subscriptions.retrieve(subId);
+        const parentMeta = (invoice as Stripe.Invoice).parent?.subscription_details?.metadata as
+          | { affiliateCode?: string; userId?: string }
+          | undefined;
+        let userId = (sub.metadata?.userId as string | undefined) ?? parentMeta?.userId;
+        let affiliateCode =
+          (sub.metadata?.affiliateCode as string | undefined) ?? parentMeta?.affiliateCode;
+        if (!userId) break;
+
+        if (!affiliateCode) {
+          const profile = await getUserProfile(userId);
+          if (profile?.referredByAffiliateId) {
+            const aff = await getAffiliateById(profile.referredByAffiliateId);
+            if (aff?.active) affiliateCode = aff.code;
+          }
+        }
+        if (!affiliateCode) break;
+
+        try {
+          const affiliate = await getAffiliateByCode(affiliateCode);
+          if (!affiliate || affiliate.userId === userId) break;
+
+          const amountCents = invoice.amount_paid ?? 0;
+          if (amountCents <= 0) break;
+
+          if (invoice.billing_reason === "subscription_cycle") {
+            if (affiliate.commissionType !== "recurring" && affiliate.commissionType !== "both") break;
+            const exists = await hasCommissionForSubscription(subId, "renewal", invoice.id);
+            if (exists) break;
+            const commissionAmount = computeCommission(affiliate, amountCents, "renewal");
+            if (commissionAmount <= 0) break;
+            await createCommission({
+              affiliateId: affiliate.id,
+              userId,
+              subscriptionId: subId,
+              invoiceId: invoice.id,
+              amount: commissionAmount,
+              transactionAmount: amountCents / 100,
+              type: "renewal",
+            });
+          } else if (invoice.billing_reason === "subscription_update") {
+            const exists = await hasCommissionForSubscription(subId, "upgrade", invoice.id);
+            if (exists) break;
+            const commissionAmount = computeCommission(affiliate, amountCents, "upgrade");
+            if (commissionAmount <= 0) break;
+            await createCommission({
+              affiliateId: affiliate.id,
+              userId,
+              subscriptionId: subId,
+              invoiceId: invoice.id,
+              amount: commissionAmount,
+              transactionAmount: amountCents / 100,
+              type: "upgrade",
+            });
+          }
+        } catch (affErr) {
+          console.warn("[Stripe webhook] Affiliate commission error:", affErr);
+        }
         break;
       }
 

@@ -39,3 +39,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/* MacOS specific files */
+._*
+.DS_Store
+
+/* Windows specific files */
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+/* Linux specific files */
+.directory
+.Trash
+.gvfs
+.cache
+.local

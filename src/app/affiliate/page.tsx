@@ -314,36 +314,47 @@ export default function AffiliateDashboardPage() {
                       </div>
                     </div>
                     <Link href="/affiliate/w9">
-                      <Button variant="outline" size="sm">Submit a new W-9</Button>
+                      <Button variant="outline" size="sm">
+                        {taxForm.status === "verified" ? "Update W-9" : "Submit a new W-9"}
+                      </Button>
                     </Link>
                   </div>
                 </div>
               )}
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Link href="/affiliate/w9">
-                  <Button variant="outline" size="sm">
-                    Fill out W-9 online
-                  </Button>
-                </Link>
-                <span className="text-xs text-muted-foreground">or upload your PDF below</span>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="w-full">
-                  <label className="text-sm font-medium">W-9 PDF</label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    className="mt-2 block w-full text-sm"
-                    onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
-                    disabled={w9Uploading}
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">PDF only · Max 10MB</p>
-                </div>
-                <Button onClick={uploadW9} disabled={w9Uploading || !w9File} className="sm:w-auto">
-                  {w9Uploading ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="mr-2 size-4" />}
-                  Upload W-9
-                </Button>
-              </div>
+              {!(taxForm?.hasW9OnFile && taxForm?.status === "verified") && (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <Link href="/affiliate/w9">
+                      <Button variant="outline" size="sm">
+                        Fill out W-9 online
+                      </Button>
+                    </Link>
+                    <span className="text-xs text-muted-foreground">or upload your PDF below</span>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="w-full">
+                      <label className="text-sm font-medium">W-9 PDF</label>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="mt-2 block w-full text-sm"
+                        onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
+                        disabled={w9Uploading}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">PDF only · Max 10MB</p>
+                    </div>
+                    <Button onClick={uploadW9} disabled={w9Uploading || !w9File} className="sm:w-auto">
+                      {w9Uploading ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="mr-2 size-4" />}
+                      Upload W-9
+                    </Button>
+                  </div>
+                </>
+              )}
+              {taxForm?.hasW9OnFile && taxForm?.status === "verified" && (
+                <p className="text-xs text-muted-foreground">
+                  You can replace your W-9 for {taxForm.year} at any time using the Update W-9 button above.
+                </p>
+              )}
             </CardContent>
           </Card>
 

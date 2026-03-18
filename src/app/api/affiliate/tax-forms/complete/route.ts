@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAffiliateByUserId } from "@/lib/affiliates";
-import { addTaxFormAudit, createTaxFormMetadata } from "@/lib/affiliate-tax-forms";
+import {
+  addTaxFormAudit,
+  createTaxFormMetadata,
+  getAffiliateTaxFormForYear,
+  replaceTaxFormForYear,
+} from "@/lib/affiliate-tax-forms";
 import { getClientIp } from "@/lib/request-utils";
 
 const BUCKET_PREFIX = "affiliate/";
@@ -57,42 +62,71 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signedAt" }, { status: 400 });
   }
 
-  const result = await createTaxFormMetadata({
+  const effectiveYear = year ?? new Date().getFullYear();
+  const existing = await getAffiliateTaxFormForYear({
     affiliateId: affiliate.id,
-    storagePath: path,
-    originalFilename,
-    mimeType,
-    sizeBytes,
-    sha256,
-    year,
-    source,
-    signedAt,
-    createdByUserId: userId,
+    year: effectiveYear,
   });
 
-  if (!result.form) {
-    const err = result.error ?? "Failed to save metadata";
-    const isDuplicate =
-      /unique|duplicate key|affiliate_tax_forms_affiliate_year/i.test(err);
-    if (isDuplicate) {
+  let form;
+  if (existing) {
+    form = await replaceTaxFormForYear({
+      affiliateId: affiliate.id,
+      year: effectiveYear,
+      storagePath: path,
+      originalFilename,
+      mimeType,
+      sizeBytes,
+      sha256,
+      source,
+      signedAt,
+      createdByUserId: userId,
+    });
+    if (!form) {
+      console.error("tax-forms/complete replaceTaxFormForYear failed");
       return NextResponse.json(
-        { error: "A W-9 for this year has already been submitted. Use the existing form or contact support to replace it." },
-        { status: 409 }
+        { error: "Failed to replace W-9 for this year" },
+        { status: 500 }
       );
     }
-    console.error("tax-forms/complete createTaxFormMetadata failed:", err);
-    return NextResponse.json(
-      {
-        error: "Failed to save metadata",
-        ...(process.env.NODE_ENV === "development" && { detail: err }),
-      },
-      { status: 500 }
-    );
+  } else {
+    const result = await createTaxFormMetadata({
+      affiliateId: affiliate.id,
+      storagePath: path,
+      originalFilename,
+      mimeType,
+      sizeBytes,
+      sha256,
+      year: effectiveYear,
+      source,
+      signedAt,
+      createdByUserId: userId,
+    });
+    if (!result.form) {
+      const err = result.error ?? "Failed to save metadata";
+      const isDuplicate =
+        /unique|duplicate key|affiliate_tax_forms_affiliate_year/i.test(err);
+      if (isDuplicate) {
+        return NextResponse.json(
+          { error: "A W-9 for this year has already been submitted. Use the existing form or contact support to replace it." },
+          { status: 409 }
+        );
+      }
+      console.error("tax-forms/complete createTaxFormMetadata failed:", err);
+      return NextResponse.json(
+        {
+          error: "Failed to save metadata",
+          ...(process.env.NODE_ENV === "development" && { detail: err }),
+        },
+        { status: 500 }
+      );
+    }
+    form = result.form;
   }
 
   const clientIp = getClientIp(request);
-  await addTaxFormAudit({ taxFormId: result.form.id, actorUserId: userId, action: "uploaded", clientIp });
+  await addTaxFormAudit({ taxFormId: form.id, actorUserId: userId, action: "uploaded", clientIp });
 
-  return NextResponse.json({ ok: true, form: result.form });
+  return NextResponse.json({ ok: true, form });
 }
 

@@ -101,6 +101,47 @@ export async function createTaxFormMetadata(params: {
   return { form: mapTaxForm(data) };
 }
 
+/** Replace the W-9 for an affiliate for a given year (same calendar year). Resets status to submitted. */
+export async function replaceTaxFormForYear(params: {
+  affiliateId: string;
+  year: number;
+  storagePath: string;
+  originalFilename?: string | null;
+  mimeType: string;
+  sizeBytes?: number | null;
+  sha256?: string | null;
+  source?: "electronic" | "uploaded";
+  signedAt?: string | null;
+  createdByUserId?: string | null;
+}): Promise<AffiliateTaxForm | null> {
+  const existing = await getAffiliateTaxFormForYear({ affiliateId: params.affiliateId, year: params.year });
+  if (!existing) return null;
+
+  const supabase = createSupabaseAdmin();
+  const updates = {
+    storage_path: params.storagePath,
+    original_filename: params.originalFilename ?? null,
+    mime_type: params.mimeType,
+    size_bytes: params.sizeBytes ?? null,
+    sha256: params.sha256 ?? null,
+    source: params.source ?? "uploaded",
+    signed_at: params.signedAt ?? null,
+    status: "submitted",
+    verified_at: null,
+    rejected_reason: null,
+    uploaded_at: new Date().toISOString(),
+    created_by_user_id: params.createdByUserId ?? null,
+  };
+  const { data, error } = await supabase
+    .from("affiliate_tax_forms")
+    .update(updates)
+    .eq("id", existing.id)
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  return mapTaxForm(data);
+}
+
 export async function addTaxFormAudit(params: {
   taxFormId: string;
   actorUserId?: string | null;
@@ -146,6 +187,23 @@ export async function listAffiliateTaxFormsForAdmin(params?: {
     const aff = r.affiliates as { code?: string; name?: string | null; email?: string | null } | null;
     return { ...f, affiliateCode: aff?.code, affiliateName: aff?.name ?? null, affiliateEmail: aff?.email ?? null };
   });
+}
+
+export async function getAffiliateTaxFormForYear(params: {
+  affiliateId: string;
+  year: number;
+}): Promise<AffiliateTaxForm | null> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("affiliate_tax_forms")
+    .select("*")
+    .eq("affiliate_id", params.affiliateId)
+    .eq("year", params.year)
+    .order("uploaded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapTaxForm(data);
 }
 
 export async function getTaxFormById(id: string): Promise<AffiliateTaxForm | null> {

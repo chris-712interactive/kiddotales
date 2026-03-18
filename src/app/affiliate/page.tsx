@@ -34,6 +34,14 @@ type AffiliateDashboard = {
     commissionRate: number;
     commissionType: string;
   } | null;
+  taxForm?: {
+    year: number;
+    hasW9OnFile: boolean;
+    status: string | null;
+    uploadedAt: string | null;
+    source: "electronic" | "uploaded" | null;
+    signedAt: string | null;
+  };
   referredByTier?: Record<string, number>;
   commissions: CommissionRow[];
 };
@@ -177,6 +185,7 @@ export default function AffiliateDashboardPage() {
   }
 
   const { affiliate, commissions, referredByTier = {} } = data;
+  const taxForm = data.taxForm;
   const refUrl = typeof window !== "undefined" ? `${window.location.origin}/?ref=${affiliate.code}` : "";
   const pendingTotal = commissions.filter((c) => c.status === "pending").reduce((s, c) => s + c.amount, 0);
   const paidTotal = commissions.filter((c) => c.status === "paid").reduce((s, c) => s + c.amount, 0);
@@ -206,6 +215,25 @@ export default function AffiliateDashboardPage() {
             <h1 className="text-2xl font-bold">Affiliate dashboard</h1>
             <p className="text-muted-foreground">Your referral link and commission history</p>
           </section>
+
+          {taxForm && !taxForm.hasW9OnFile && (
+            <Card className="border-2 border-amber-400/60 bg-amber-50/40">
+              <CardHeader>
+                <CardTitle>Action required: submit your W-9</CardTitle>
+                <CardDescription>
+                  To receive affiliate payouts, we need a W-9 on file for {taxForm.year}. You can fill it out online or upload a PDF.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Link href="/affiliate/w9">
+                  <Button variant="default" size="sm">Fill out W-9 online</Button>
+                </Link>
+                <a href="#w9-card">
+                  <Button variant="outline" size="sm">Upload a PDF</Button>
+                </a>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -273,7 +301,24 @@ export default function AffiliateDashboardPage() {
                 Fill it out online (recommended) or upload your own PDF. This is stored securely and only the KiddoTales owner/admin can access it.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent id="w9-card">
+              {taxForm?.hasW9OnFile && (
+                <div className="mb-4 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">W-9 on file for {taxForm.year}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Status: {taxForm.status ?? "submitted"}
+                        {taxForm.source ? ` · Source: ${taxForm.source}` : ""}
+                        {taxForm.uploadedAt ? ` · Submitted: ${new Date(taxForm.uploadedAt).toLocaleDateString()}` : ""}
+                      </div>
+                    </div>
+                    <Link href="/affiliate/w9">
+                      <Button variant="outline" size="sm">Submit a new W-9</Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Link href="/affiliate/w9">
                   <Button variant="outline" size="sm">

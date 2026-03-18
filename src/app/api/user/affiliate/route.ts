@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAffiliateByUserId, getCommissions, getReferredUserCountsByTier } from "@/lib/affiliates";
+import { getAffiliateTaxFormForYear } from "@/lib/affiliate-tax-forms";
 
 /** GET: Affiliate dashboard data for the current user (link + commissions). */
 export async function GET() {
@@ -20,6 +21,9 @@ export async function GET() {
     getReferredUserCountsByTier(affiliate.id),
   ]);
 
+  const currentYear = new Date().getFullYear();
+  const w9 = await getAffiliateTaxFormForYear({ affiliateId: affiliate.id, year: currentYear });
+
   return NextResponse.json({
     affiliate: {
       id: affiliate.id,
@@ -27,6 +31,14 @@ export async function GET() {
       name: affiliate.name,
       commissionRate: affiliate.commissionRate,
       commissionType: affiliate.commissionType,
+    },
+    taxForm: {
+      year: currentYear,
+      hasW9OnFile: !!w9,
+      status: w9?.status ?? null,
+      uploadedAt: w9?.uploadedAt ?? null,
+      source: w9?.source ?? null,
+      signedAt: w9?.signedAt ?? null,
     },
     referredByTier,
     commissions: commissions.map((c) => ({

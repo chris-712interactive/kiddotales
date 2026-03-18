@@ -148,6 +148,23 @@ export async function listAffiliateTaxFormsForAdmin(params?: {
   });
 }
 
+export async function getAffiliateTaxFormForYear(params: {
+  affiliateId: string;
+  year: number;
+}): Promise<AffiliateTaxForm | null> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("affiliate_tax_forms")
+    .select("*")
+    .eq("affiliate_id", params.affiliateId)
+    .eq("year", params.year)
+    .order("uploaded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapTaxForm(data);
+}
+
 export async function getTaxFormById(id: string): Promise<AffiliateTaxForm | null> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase.from("affiliate_tax_forms").select("*").eq("id", id).single();

@@ -131,7 +131,7 @@ export function LoadingScreen({
           Weaving your magic story...
         </p>
         {showSteps ? (
-          <div className="w-full max-w-sm max-h-[50vh] overflow-y-auto space-y-2 creation-steps-container creation-steps-container-light dark:creation-steps-container-dark">
+          <div className="w-full max-w-sm max-h-[50vh] overflow-y-auto space-y-2 creation-steps-container light:creation-steps-container-light dark:creation-steps-container-dark">
             {GENERATION_STEPS.map((step, i) => (
               <div
                 key={step}

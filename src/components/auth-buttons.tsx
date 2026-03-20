@@ -67,7 +67,7 @@ export function AuthButtons({ variant = "default", setOpen }: AuthButtonsProps) 
           <Button
             variant="ghost"
             className="w-full justify-start"
-            onClick={() => signOut()}
+            onClick={() => signOut({ callbackUrl: "/" })}
             aria-label="Sign out"
           >
             <LogOut className="mr-2 size-4" />

@@ -58,6 +58,34 @@
     --pastel-lavender: hsl(227 45% 94%);
   }
 
+  /* Force light theme on a subtree (e.g. unauthenticated landing) */
+  .light {
+    --background: hsl(210 30% 98%);
+    --foreground: hsl(220 15% 15%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(220 15% 15%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(220 15% 15%);
+    --primary: hsl(207 72% 59%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(207 60% 92%);
+    --secondary-foreground: hsl(207 50% 25%);
+    --muted: hsl(210 25% 95%);
+    --muted-foreground: hsl(220 10% 45%);
+    --accent: hsl(174 70% 85%);
+    --accent-foreground: hsl(174 50% 25%);
+    --destructive: hsl(0 70% 55%);
+    --destructive-foreground: hsl(0 0% 100%);
+    --border: hsl(210 25% 90%);
+    --input: hsl(210 25% 90%);
+    --ring: hsl(207 72% 59%);
+    --pastel-pink: hsl(227 55% 94%);
+    --pastel-blue: hsl(207 55% 94%);
+    --pastel-yellow: hsl(189 55% 94%);
+    --pastel-mint: hsl(174 55% 94%);
+    --pastel-lavender: hsl(227 45% 94%);
+  }
+
   .dark {
     --background: hsl(220 20% 8%);
     --foreground: hsl(210 20% 95%);

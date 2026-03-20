@@ -5,8 +5,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   FileText,
   Music,
-  Pause,
   Play,
+  Square,
   Sparkles,
   Volume2,
 } from "lucide-react";
@@ -31,14 +31,20 @@ export default function UnauthenticatedLandingArtDemo({
             {previewMode === "text" && <Sparkles className="size-4 text-primary" />}
             {previewMode === "illustrations" && <Sparkles className="size-4 text-primary" />}
             {previewMode === "pdf" && <FileText className="size-4 text-primary" />}
-            {previewMode === "voice" && <Volume2 className="size-4 text-primary" />}
             {previewMode === "text" && "Story preview"}
             {previewMode === "illustrations" && "Illustration preview"}
             {previewMode === "pdf" && "PDF preview"}
-            {previewMode === "voice" && "Read-aloud preview"}
           </div>
           <div className="text-xs text-muted-foreground">
-            {previewMode === "text" ? "Generated text" : previewMode === "illustrations" ? "AI art style" : previewMode === "pdf" ? "Print-ready layout" : "Optional audio"}
+            {
+              previewMode === "text" && "Generated text"
+            }
+            {
+              previewMode === "illustrations" && "AI art style"
+            }
+            {
+              previewMode === "pdf" && "Print-ready layout"
+            }
           </div>
         </div>
 
@@ -219,7 +225,7 @@ function AnimateSwitch({ previewMode }: { previewMode: PreviewMode }) {
     >
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
+          <div className="text-left">
             <div className="text-sm font-semibold text-foreground">
               Voice narration
             </div>
@@ -239,41 +245,10 @@ function AnimateSwitch({ previewMode }: { previewMode: PreviewMode }) {
           onEnded={() => setVoicePlaying(false)}
         />
 
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/40"
-            onClick={async () => {
-              const el = audioRef.current;
-              if (!el) return;
-              if (el.paused) {
-                try {
-                  await el.play();
-                } catch {
-                  // Autoplay policies can prevent play until user interaction.
-                }
-              } else {
-                el.pause();
-              }
-            }}
-            aria-label={voicePlaying ? "Pause read-aloud preview" : "Play read-aloud preview"}
-          >
-            {voicePlaying ? (
-              <>
-                <Pause className="mr-2 size-4" />
-                Pause preview
-              </>
-            ) : (
-              <>
-                <Play className="mr-2 size-4" />
-                Play preview
-              </>
-            )}
-          </button>
-
-          <span className="text-xs text-muted-foreground">
-            {voicePlaying ? "Playing sample (fable)" : "Sample audio (fable)"}
-          </span>
+        <div className="mt-4 text-xs text-muted-foreground">
+          {voicePlaying
+            ? "Now playing: Fable read-aloud sample"
+            : "Tap the player below to hear the Fable read-aloud sample"}
         </div>
 
         <div className="mt-4 flex justify-center items-center gap-2 w-full" aria-hidden="true">
@@ -290,19 +265,41 @@ function AnimateSwitch({ previewMode }: { previewMode: PreviewMode }) {
           ))}
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-primary/10 p-3">
+        <button
+          type="button"
+          className="mt-4 flex w-full items-center justify-between gap-3 rounded-lg bg-primary/10 p-3 text-left transition-colors hover:bg-primary/15"
+          onClick={async () => {
+            const el = audioRef.current;
+            if (!el) return;
+            if (el.paused) {
+              try {
+                await el.play();
+              } catch {
+                // Autoplay policies can prevent play until user interaction.
+              }
+            } else {
+              el.pause();
+              el.currentTime = 0;
+            }
+          }}
+          aria-label={voicePlaying ? "Stop read-aloud preview" : "Play read-aloud preview"}
+        >
           <div className="min-w-0">
             <div className="text-xs truncate font-semibold text-foreground">
-              &quot;Goodnight, Ava...&quot;
+              Fable voice sample narration
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-              (Example transcript)
+              {voicePlaying ? "Playing now - tap to stop" : "Tap to play"}
             </div>
           </div>
           <div className="flex size-10 items-center justify-center rounded-full border border-border bg-card">
-            <div className="ml-0.5 size-0 border-y-[6px] border-y-transparent border-l-[10px] border-l-primary" />
+            {voicePlaying ? (
+              <Square className="size-4 text-primary" />
+            ) : (
+              <Play className="ml-0.5 size-4 text-primary" />
+            )}
           </div>
-        </div>
+        </button>
       </div>
     </motion.div>
   );

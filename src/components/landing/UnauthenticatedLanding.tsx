@@ -111,7 +111,7 @@ function FAQAccordion() {
   const [openId, setOpenId] = useState<string | null>(faqItems[0]?.id ?? null);
 
   return (
-    <div className="mx-auto grid gap-5 md:grid-cols-2">
+    <div className="mx-auto grid gap-5">
       {faqItems.map((item, idx) => {
         const open = openId === item.id;
         return (

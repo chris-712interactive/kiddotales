@@ -20,6 +20,7 @@ interface AppHeaderProps {
 export function AppHeader({ pageActions, className }: AppHeaderProps) {
   const [open, setOpen] = useState(false);
   const { data: session } = useSession();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (open) {
@@ -31,6 +32,34 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    let mounted = true;
+    const loadNotifications = () => {
+      fetch("/api/notifications")
+        .then((r) => (r.ok ? r.json() : { notifications: [] }))
+        .then((data) => {
+          if (!mounted) return;
+          const notifications = Array.isArray(data?.notifications) ? data.notifications : [];
+          setUnreadCount(notifications.length);
+        })
+        .catch(() => {
+          if (mounted) setUnreadCount(0);
+        });
+    };
+
+    loadNotifications();
+    const id = window.setInterval(loadNotifications, 60000);
+    return () => {
+      mounted = false;
+      window.clearInterval(id);
+    };
+  }, [session?.user]);
 
   return (
     <>
@@ -55,11 +84,16 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="size-10 shrink-0"
+            className="relative size-10 shrink-0"
             onClick={() => setOpen(true)}
             aria-label="Open menu"
           >
             <Menu className="size-6" />
+            {unreadCount > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            ) : null}
           </Button>
         </div>
       </header>
@@ -110,6 +144,19 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
                     Create a book
                   </Button>
                 </Link>
+                {session?.user ? (
+                  <Link href="/messages" className="block w-full" onClick={() => setOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Bell className="mr-2 size-4" />
+                      Message Center
+                      {unreadCount > 0 ? (
+                        <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
+                          {unreadCount}
+                        </span>
+                      ) : null}
+                    </Button>
+                  </Link>
+                ) : null}
                 <AuthButtons variant="drawer" setOpen={setOpen} />
               </nav>
             </motion.aside>

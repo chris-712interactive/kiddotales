@@ -38,6 +38,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AppHeader } from "@/components/app-header";
+import { FeedbackCategoryBadge } from "@/components/feedback-category-badge";
 
 type BooksByTierDay = { date: string } & Record<string, number>;
 
@@ -201,8 +202,8 @@ export default function AdminPage() {
 
           {/* Stats overview */}
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Link href="/admin/users">
-              <Card className="transition-colors hover:border-primary/50">
+            <Link href="/admin/users" className="block h-full">
+              <Card className="h-full transition-colors hover:border-primary/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Users className="size-5" />
@@ -217,7 +218,7 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </Link>
-            <Card>
+            <Card className="h-full">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <BookOpen className="size-5" />
@@ -231,7 +232,7 @@ export default function AdminPage() {
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="h-full">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <UserPlus className="size-5" />
@@ -242,22 +243,24 @@ export default function AdminPage() {
                 <p className="text-2xl font-bold">{stats.childProfiles}</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <MessageSquare className="size-5" />
-                  Feedback
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{stats.feedback.total}</p>
-                <p className="text-sm text-muted-foreground">
-                  submissions
-                </p>
-              </CardContent>
-            </Card>
-            <Link href="/admin/affiliates">
-              <Card className="transition-colors hover:border-primary/50">
+            <Link href="/admin/feedback" className="block h-full">
+              <Card className="h-full transition-colors hover:border-primary/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <MessageSquare className="size-5" />
+                    Feedback
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{stats.feedback.total}</p>
+                  <p className="text-sm text-muted-foreground">
+                    submissions - manage
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/admin/affiliates" className="block h-full">
+              <Card className="h-full transition-colors hover:border-primary/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <DollarSign className="size-5" />
@@ -269,8 +272,8 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </Link>
-            <Link href="/admin/payouts">
-              <Card className="transition-colors hover:border-primary/50">
+            <Link href="/admin/payouts" className="block h-full">
+              <Card className="h-full transition-colors hover:border-primary/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Banknote className="size-5" />
@@ -282,8 +285,8 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </Link>
-            <Link href="/admin/tax-forms">
-              <Card className="transition-colors hover:border-primary/50">
+            <Link href="/admin/tax-forms" className="block h-full">
+              <Card className="h-full transition-colors hover:border-primary/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <FileText className="size-5" />
@@ -352,12 +355,8 @@ export default function AdminPage() {
                       className="rounded-lg border border-border bg-muted/20 p-4"
                     >
                       <p className="whitespace-pre-wrap text-sm">{f.message}</p>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {f.category && (
-                          <span className="rounded-full bg-muted px-2 py-0.5">
-                            {f.category}
-                          </span>
-                        )}
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <FeedbackCategoryBadge category={f.category} />
                         {f.email && <span>{f.email}</span>}
                         <span>
                           {new Date(f.createdAt).toLocaleString()}
@@ -368,6 +367,11 @@ export default function AdminPage() {
                 </ul>
               )}
             </CardContent>
+            <div className="px-6 pb-6">
+              <Link href="/admin/feedback">
+                <Button variant="outline" size="sm">Manage all feedback</Button>
+              </Link>
+            </div>
           </Card>
         </motion.div>
       </main>

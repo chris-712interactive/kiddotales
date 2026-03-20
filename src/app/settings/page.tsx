@@ -39,6 +39,23 @@ type SettingsData = {
   theme?: "light" | "dark";
 };
 
+type FeedbackTicket = {
+  id: string;
+  category: string | null;
+  status: "new" | "in_review" | "resolved";
+  created_at: string;
+  updated_at: string | null;
+  unread_for_user: boolean;
+};
+
+type FeedbackMessage = {
+  id: string;
+  sender_role: "user" | "admin";
+  sender_email: string | null;
+  message: string;
+  created_at: string;
+};
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<SettingsData | null>(null);
@@ -135,6 +152,7 @@ function SettingsContent() {
       .catch(() => toast.error("Could not load settings"))
       .finally(() => setLoading(false));
   }, []);
+
 
   const handleRevokeConsent = async () => {
     if (!confirm("This will revoke your consent. You will need to consent again before creating new books. Continue?")) return;
@@ -490,6 +508,13 @@ function SettingsContent() {
             </CardHeader>
             <CardContent>
               <FeedbackTrigger variant="button" />
+              <div className="mt-4">
+                <Link href="/messages">
+                  <Button variant="outline" size="sm">
+                    Open Message Center
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

@@ -5,6 +5,7 @@ import {
   getAllBooksByUserId,
   getUserProfile,
 } from "@/lib/db";
+import { createSupabaseAdmin } from "@/lib/supabase";
 
 const WARNING_DAYS = 30;
 const DELETION_DAYS = 90;
@@ -15,6 +16,13 @@ export type RetentionNotification = {
   bookTitle: string;
   daysSinceOpened: number;
   deletionInDays: number;
+};
+
+export type FeedbackNotification = {
+  type: "feedback_reply";
+  ticketId: string;
+  category: string | null;
+  createdAt: string;
 };
 
 /** GET: Notifications for the current user (retention warnings, etc.) */
@@ -31,13 +39,9 @@ export async function GET() {
     const profile = await getUserProfile(userId);
     const tier = profile?.subscriptionTier ?? "free";
 
-    if (tier !== "free") {
-      return NextResponse.json({ notifications: [] });
-    }
-
-    const books = await getAllBooksByUserId(userId);
+    const books = tier === "free" ? await getAllBooksByUserId(userId) : [];
     const now = new Date();
-    const notifications: RetentionNotification[] = [];
+    const notifications: Array<RetentionNotification | FeedbackNotification> = [];
 
     for (const book of books) {
       const lastOpened = book.lastOpenedAt
@@ -57,6 +61,23 @@ export async function GET() {
           deletionInDays,
         });
       }
+    }
+
+    const { data: unreadFeedback } = await createSupabaseAdmin()
+      .from("feedback")
+      .select("id, category, updated_at")
+      .eq("user_id", userId)
+      .eq("unread_for_user", true)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    for (const row of unreadFeedback ?? []) {
+      notifications.push({
+        type: "feedback_reply",
+        ticketId: row.id as string,
+        category: (row.category as string | null) ?? null,
+        createdAt: (row.updated_at as string) ?? new Date().toISOString(),
+      });
     }
 
     return NextResponse.json({ notifications });

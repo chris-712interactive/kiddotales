@@ -24,15 +24,37 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KiddoTales - Turn 60 seconds into bedtime magic",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  title: "KiddoTales - Personalized AI Bedtime Stories (AI Voice + Print-Ready PDFs)",
   description:
-    "Create personalized AI-powered storybooks for your child in minutes. Custom stories with their name, interests, and life lessons.",
-  keywords: ["children", "storybook", "bedtime", "AI", "personalized", "kids"],
+    "Create personalized AI bedtime stories for kids (ages 3–10) in minutes. Includes AI illustrations, optional AI voice read-aloud, and print-ready PDF storybooks.",
+  keywords: [
+    "kiddo tales",
+    "bedtime stories",
+    "personalized stories",
+    "AI storybooks",
+    "AI voice read aloud",
+    "print-ready PDF",
+    "children 3-10",
+  ],
   authors: [{ name: "KiddoTales" }],
   openGraph: {
-    title: "KiddoTales - Turn 60 seconds into bedtime magic",
-    description: "Create personalized AI-powered storybooks for your child",
+    title: "KiddoTales - Personalized AI Bedtime Stories",
+    description:
+      "Personalized AI bedtime stories with optional AI voice read-aloud and print-ready PDFs.",
     type: "website",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "KiddoTales - Turn 60 seconds into bedtime magic",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/opengraph-image"],
   },
   icons: {
     icon: [

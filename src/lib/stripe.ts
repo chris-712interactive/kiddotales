@@ -2,6 +2,55 @@ import Stripe from "stripe";
 
 export type BookLimitPeriod = "total" | "monthly";
 
+/** Whether to use live Stripe keys/prices (production only). Use sandbox otherwise. */
+export function isStripeLiveMode(): boolean {
+  // Vercel: production deployment uses live; preview/development use sandbox
+  if (process.env.VERCEL_ENV === "production") return true;
+  // Explicit override for non-Vercel production (e.g. `STRIPE_USE_LIVE=true`)
+  if (process.env.STRIPE_USE_LIVE === "true") return true;
+  return false;
+}
+
+/** Get Stripe secret key for current environment (sandbox or live). */
+function getStripeSecretKey(): string | undefined {
+  const useLive = isStripeLiveMode();
+  return useLive
+    ? process.env.STRIPE_SECRET_KEY_LIVE ?? process.env.STRIPE_SECRET_KEY
+    : process.env.STRIPE_SECRET_KEY;
+}
+
+/** Get Stripe webhook secret for current environment. */
+export function getStripeWebhookSecret(): string | undefined {
+  const useLive = isStripeLiveMode();
+  return useLive
+    ? process.env.STRIPE_WEBHOOK_SECRET_LIVE ?? process.env.STRIPE_WEBHOOK_SECRET
+    : process.env.STRIPE_WEBHOOK_SECRET;
+}
+
+/** Get Stripe price IDs for current environment (sandbox or live). */
+export function getStripePriceIds(): {
+  spark: { monthly?: string; yearly?: string };
+  magic: { monthly?: string; yearly?: string };
+  legend: { monthly?: string; yearly?: string };
+} {
+  const useLive = isStripeLiveMode();
+  const suffix = useLive ? "_LIVE" : "";
+  return {
+    spark: {
+      monthly: process.env[`NEXT_PUBLIC_STRIPE_PRICE_SPARK_MONTHLY${suffix}`] ?? process.env.NEXT_PUBLIC_STRIPE_PRICE_SPARK_MONTHLY,
+      yearly: process.env[`NEXT_PUBLIC_STRIPE_PRICE_SPARK_YEARLY${suffix}`] ?? process.env.NEXT_PUBLIC_STRIPE_PRICE_SPARK_YEARLY,
+    },
+    magic: {
+      monthly: process.env[`NEXT_PUBLIC_STRIPE_PRICE_MAGIC_MONTHLY${suffix}`] ?? process.env.NEXT_PUBLIC_STRIPE_PRICE_MAGIC_MONTHLY,
+      yearly: process.env[`NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY${suffix}`] ?? process.env.NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY,
+    },
+    legend: {
+      monthly: process.env[`NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY${suffix}`] ?? process.env.NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY,
+      yearly: process.env[`NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY${suffix}`] ?? process.env.NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY,
+    },
+  };
+}
+
 /** Subscription tiers and their limits/features */
 export const SUBSCRIPTION_TIERS = {
   free: {
@@ -35,8 +84,8 @@ export const SUBSCRIPTION_TIERS = {
       "AI voice read-aloud",
       "Edit Book"
     ],
-    priceIdMonthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_SPARK_MONTHLY,
-    priceIdYearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_SPARK_YEARLY,
+    priceIdMonthly: undefined, // Use getStripePriceIds() for env-aware IDs
+    priceIdYearly: undefined,
   },
   magic: {
     id: "magic",
@@ -56,8 +105,8 @@ export const SUBSCRIPTION_TIERS = {
       "Premium PDF layouts (cover + extras)",
       "3 voice options",
     ],
-    priceIdMonthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_MAGIC_MONTHLY,
-    priceIdYearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY,
+    priceIdMonthly: undefined,
+    priceIdYearly: undefined,
   },
   legend: {
     id: "legend",
@@ -77,8 +126,8 @@ export const SUBSCRIPTION_TIERS = {
       "Highest priority",
       "Commercial-use rights for teachers/daycares (limited)",
     ],
-    priceIdMonthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY,
-    priceIdYearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY,
+    priceIdMonthly: undefined,
+    priceIdYearly: undefined,
   },
 } as const;
 
@@ -109,33 +158,32 @@ export function getTierRank(tier: string): number {
   return TIER_RANK[tier as SubscriptionTierId] ?? 0;
 }
 
-/** Get Stripe price ID for a tier (for admin/manual subscription updates) */
+/** Get Stripe price ID for a tier (for admin/manual subscription updates). Uses env-aware IDs. */
 export function getPriceIdForTier(
   tier: string,
   period: "monthly" | "yearly" = "monthly"
 ): string | null {
   if (tier === "free") return null;
-  const config = SUBSCRIPTION_TIERS[tier as SubscriptionTierId];
-  if (!config) return null;
-  const c = config as { priceIdMonthly?: string; priceIdYearly?: string };
-  return (period === "yearly" ? c.priceIdYearly : c.priceIdMonthly) ?? null;
+  const prices = getStripePriceIds();
+  const tierPrices = prices[tier as keyof typeof prices];
+  if (!tierPrices) return null;
+  return (period === "yearly" ? tierPrices.yearly : tierPrices.monthly) ?? null;
 }
 
-/** Map Stripe price ID to tier */
+/** Map Stripe price ID to tier. Uses env-aware price IDs. */
 export function getTierFromPriceId(priceId: string): SubscriptionTierId | null {
+  const prices = getStripePriceIds();
   const priceMap: Record<string, SubscriptionTierId> = {};
-  for (const [tier, config] of Object.entries(SUBSCRIPTION_TIERS)) {
-    if (tier === "free") continue;
-    const c = config as { priceIdMonthly?: string; priceIdYearly?: string };
-    if (c.priceIdMonthly) priceMap[c.priceIdMonthly] = tier as SubscriptionTierId;
-    if (c.priceIdYearly) priceMap[c.priceIdYearly] = tier as SubscriptionTierId;
+  for (const [tier, p] of Object.entries(prices)) {
+    if (p.monthly) priceMap[p.monthly] = tier as SubscriptionTierId;
+    if (p.yearly) priceMap[p.yearly] = tier as SubscriptionTierId;
   }
   return priceMap[priceId] ?? null;
 }
 
-/** Get Stripe instance (server-side only) */
+/** Get Stripe instance (server-side only). Uses env-aware secret key. */
 export function getStripe(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = getStripeSecretKey();
   if (!key) return null;
   return new Stripe(key);
 }

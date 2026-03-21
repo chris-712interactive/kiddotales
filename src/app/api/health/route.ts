@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getStripe } from "@/lib/stripe";
 
 /** Health check endpoint for load balancers and monitoring. */
 export async function GET() {
@@ -7,7 +8,7 @@ export async function GET() {
     openai: !!process.env.OPENAI_API_KEY,
     replicate: !!process.env.REPLICATE_API_TOKEN,
     supabase: !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-    stripe: !!process.env.STRIPE_SECRET_KEY,
+    stripe: !!getStripe(),
   };
 
   const healthy = checks.app;

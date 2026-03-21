@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { getStripe, getTierFromPriceId } from "@/lib/stripe";
+import { getStripe, getTierFromPriceId, getStripeWebhookSecret } from "@/lib/stripe";
 import { updateSubscriptionFromStripe, getUserProfile } from "@/lib/db";
 import {
   getAffiliateByCode,
@@ -14,7 +14,7 @@ import {
 /** Stripe webhook handler. Must use raw body for signature verification. */
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = getStripeWebhookSecret();
 
   if (!stripe || !webhookSecret) {
     console.error("[Stripe webhook] Missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET");

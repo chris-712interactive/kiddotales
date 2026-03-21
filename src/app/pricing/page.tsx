@@ -33,12 +33,24 @@ export default function PricingPage() {
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<string | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [priceIds, setPriceIds] = useState<{
+    spark?: { monthly?: string; yearly?: string };
+    magic?: { monthly?: string; yearly?: string };
+    legend?: { monthly?: string; yearly?: string };
+  } | null>(null);
   const [upgradeModal, setUpgradeModal] = useState<{
     priceId: string;
     tierName: string;
     amountFormatted: string;
   } | null>(null);
   const [upgradeConfirmLoading, setUpgradeConfirmLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/stripe/price-ids")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((ids) => setPriceIds(ids))
+      .catch(() => setPriceIds(null));
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -220,8 +232,9 @@ export default function PricingPage() {
 
           {/* Paid tiers */}
           {paidTiers.map((tier, idx) => {
-            const priceIdMonthly = (tier as { priceIdMonthly?: string }).priceIdMonthly;
-            const priceIdYearly = (tier as { priceIdYearly?: string }).priceIdYearly;
+            const tierPriceIds = priceIds?.[tier.id as keyof typeof priceIds];
+            const priceIdMonthly = tierPriceIds?.monthly;
+            const priceIdYearly = tierPriceIds?.yearly;
             const hasPrices = !!(priceIdMonthly || priceIdYearly);
 
             return (

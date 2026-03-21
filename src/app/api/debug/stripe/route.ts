@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
+import { getStripe, isStripeLiveMode } from "@/lib/stripe";
 
 /** Temporary debug route - disabled in production. */
 export async function GET() {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const stripe = getStripe();
   return NextResponse.json({
-    stripeConfigured: !!secretKey,
-    secretKeySet: (secretKey?.length ?? 0) > 0,
-    hint: !secretKey
-      ? "STRIPE_SECRET_KEY not found. Check .env is in project root and restart dev server."
+    stripeConfigured: !!stripe,
+    liveMode: isStripeLiveMode(),
+    hint: !stripe
+      ? "STRIPE_SECRET_KEY (or STRIPE_SECRET_KEY_LIVE in prod) not found. Check .env and restart dev server."
       : "Key is loaded. If checkout still fails, the key may be invalid.",
   });
 }

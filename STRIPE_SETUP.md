@@ -29,14 +29,18 @@ This guide walks you through connecting your Stripe account to KiddoTales for se
 
 ## Step 2: Configure Environment Variables
 
-Add these to your `.env` file (use `.env.local` for local development):
+The app automatically uses **sandbox** (test) Stripe keys and price IDs in non-production environments, and **live** keys in production (`VERCEL_ENV=production` or `STRIPE_USE_LIVE=true`).
+
+### Sandbox (local dev, preview deploys)
+
+Add these to your `.env` file:
 
 ```env
-# Stripe API Keys (Dashboard → Developers → API keys)
+# Stripe API Keys - Sandbox/Test (Dashboard → Developers → API keys → Test mode)
 STRIPE_SECRET_KEY=sk_test_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
-# Price IDs (NEXT_PUBLIC_ required - pricing page runs in browser)
+# Price IDs - Sandbox (from test mode products)
 NEXT_PUBLIC_STRIPE_PRICE_SPARK_MONTHLY=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_SPARK_YEARLY=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_MAGIC_MONTHLY=price_xxx
@@ -44,9 +48,35 @@ NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY=price_xxx
 
+# Webhook secret (from Stripe CLI or test webhook endpoint)
+STRIPE_WEBHOOK_SECRET=whsec_...
+
 # App URL (for redirects)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
+
+### Production (live mode)
+
+In your production environment (e.g. Vercel Production), add the `_LIVE` suffixed variables. The app will use these when `VERCEL_ENV=production`:
+
+```env
+# Stripe API Keys - Live (Dashboard → Developers → API keys → Live mode)
+STRIPE_SECRET_KEY_LIVE=sk_live_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE=pk_live_...
+
+# Price IDs - Live (from live mode products)
+NEXT_PUBLIC_STRIPE_PRICE_SPARK_MONTHLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_PRICE_SPARK_YEARLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_PRICE_MAGIC_MONTHLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY_LIVE=price_xxx
+
+# Webhook secret (from live webhook endpoint)
+STRIPE_WEBHOOK_SECRET_LIVE=whsec_...
+```
+
+**Alternative:** If you prefer a single set of variables and different values per environment, configure them in your host’s project settings (e.g. Vercel: Production vs Preview). The app falls back to the non-suffixed vars when `_LIVE` vars are missing.
 
 ---
 
@@ -132,7 +162,12 @@ For "Manage subscription" to work, enable the Billing Portal in Stripe:
 ## Going Live
 
 1. Switch Stripe to **Live mode** in the Dashboard
-2. Create live products/prices (or use the same structure)
-3. Update env vars with live keys and price IDs
-4. Add production webhook endpoint
+2. Create live products/prices (mirror your test structure)
+3. Add the `_LIVE` suffixed env vars to your production deployment (see Step 2)
+4. Add production webhook endpoint and set `STRIPE_WEBHOOK_SECRET_LIVE`
 5. Test with a real card in live mode
+
+### Environment detection
+
+- **Production:** `VERCEL_ENV=production` (Vercel) or `STRIPE_USE_LIVE=true` (e.g. self-hosted)
+- **Sandbox:** All other environments (local, Vercel Preview, etc.)

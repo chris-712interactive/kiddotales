@@ -16,9 +16,9 @@ This guide walks you through connecting your Stripe account to KiddoTales for se
 
 | Product | Monthly Price | Yearly Price | Book Limit |
 |---------|---------------|--------------|------------|
-| **Spark** | $4.99/month | $49/year | 20 books/month |
-| **Magic** | $9.99/month | $99/year | 60 books/month |
-| **Legend** | $14.99/month | $149/year | 200 books/month |
+| **Spark** | $5.99/month | $59/year | 12 books/month |
+| **Magic** | $9.99/month | $99/year | 35 books/month |
+| **Legend** | $16.99/month | $169/year | 75 books/month |
 
 3. For each product:
    - Set **Recurring** billing

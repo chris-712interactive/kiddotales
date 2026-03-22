@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { AppHeader } from "@/components/app-header";
 import { FeedbackTrigger } from "@/components/feedback-trigger";
+import { getBookLimitForTier } from "@/lib/stripe";
 import { toast } from "sonner";
 
 type SettingsData = {
@@ -80,14 +81,14 @@ function SettingsContent() {
         .then((r) => r.json())
         .then((res) => {
           if (res.success) {
-            const limits = { spark: 20, magic: 60, legend: 200 };
+            const { limit, period } = getBookLimitForTier(res.tier);
             setData((prev) =>
               prev
                 ? {
                     ...prev,
                     subscriptionTier: res.tier,
-                    bookLimit: limits[res.tier as keyof typeof limits] ?? prev.bookLimit,
-                    bookLimitPeriod: "monthly",
+                    bookLimit: limit,
+                    bookLimitPeriod: period,
                   }
                 : prev
             );

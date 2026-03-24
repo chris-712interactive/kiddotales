@@ -48,11 +48,26 @@ NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY=price_xxx
 
+# Gift (one-time) price IDs - Sandbox
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_MONTHLY=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_YEARLY=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_MONTHLY=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_YEARLY=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_MONTHLY=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_YEARLY=price_xxx
+
 # Webhook secret (from Stripe CLI or test webhook endpoint)
 STRIPE_WEBHOOK_SECRET=whsec_...
 
 # App URL (for redirects)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Mailgun (gift emails)
+MAILGUN_API_KEY=key-...
+MAILGUN_DOMAIN=sandbox123.mailgun.org
+MAILGUN_BASE_URL=https://api.mailgun.net
+# Optional; defaults to postmaster@MAILGUN_DOMAIN
+MAILGUN_FROM_EMAIL="KiddoTales <postmaster@sandbox123.mailgun.org>"
 ```
 
 ### Production (live mode)
@@ -72,11 +87,28 @@ NEXT_PUBLIC_STRIPE_PRICE_MAGIC_YEARLY_LIVE=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_LEGEND_MONTHLY_LIVE=price_xxx
 NEXT_PUBLIC_STRIPE_PRICE_LEGEND_YEARLY_LIVE=price_xxx
 
+# Gift (one-time) price IDs - Live
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_MONTHLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_YEARLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_MONTHLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_YEARLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_MONTHLY_LIVE=price_xxx
+NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_YEARLY_LIVE=price_xxx
+
 # Webhook secret (from live webhook endpoint)
 STRIPE_WEBHOOK_SECRET_LIVE=whsec_...
 ```
 
 **Alternative:** If you prefer a single set of variables and different values per environment, configure them in your host’s project settings (e.g. Vercel: Production vs Preview). The app falls back to the non-suffixed vars when `_LIVE` vars are missing.
+
+### Gift email behavior
+
+When a gift membership payment succeeds, KiddoTales will:
+
+- Email the purchaser with the gift code
+- Email the recipient too, if a recipient email was entered during gift checkout
+
+Gift emails are sent via Mailgun from the Stripe webhook handler.
 
 ---
 

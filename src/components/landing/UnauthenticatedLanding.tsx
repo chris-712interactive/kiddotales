@@ -226,9 +226,14 @@ function PlanTeaser() {
               Features update as you upgrade—no surprises.
             </p>
           </div>
-          <Link href="/pricing">
-            <Button variant="outline">Compare full plans</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/pricing">
+              <Button variant="outline">Compare full plans</Button>
+            </Link>
+            <Link href="/pricing?intent=gift">
+              <Button variant="outline">Gift a membership</Button>
+            </Link>
+          </div>
         </div>
       </Reveal>
 
@@ -695,6 +700,11 @@ export default function UnauthenticatedLanding() {
               <Link href="/pricing">
                 <Button variant="outline" size="lg">
                   View plans & pricing
+                </Button>
+              </Link>
+              <Link href="/pricing?intent=gift">
+                <Button variant="outline" size="lg">
+                  Gift a membership
                 </Button>
               </Link>
             </div>

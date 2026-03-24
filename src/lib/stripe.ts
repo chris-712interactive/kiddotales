@@ -51,6 +51,42 @@ export function getStripePriceIds(): {
   };
 }
 
+/** Get Stripe gift (one-time) price IDs for current environment. */
+export function getStripeGiftPriceIds(): {
+  spark: { monthly?: string; yearly?: string };
+  magic: { monthly?: string; yearly?: string };
+  legend: { monthly?: string; yearly?: string };
+} {
+  const useLive = isStripeLiveMode();
+  const suffix = useLive ? "_LIVE" : "";
+  return {
+    spark: {
+      monthly:
+        process.env[`NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_MONTHLY${suffix}`] ??
+        process.env.NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_MONTHLY,
+      yearly:
+        process.env[`NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_YEARLY${suffix}`] ??
+        process.env.NEXT_PUBLIC_STRIPE_GIFT_PRICE_SPARK_YEARLY,
+    },
+    magic: {
+      monthly:
+        process.env[`NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_MONTHLY${suffix}`] ??
+        process.env.NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_MONTHLY,
+      yearly:
+        process.env[`NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_YEARLY${suffix}`] ??
+        process.env.NEXT_PUBLIC_STRIPE_GIFT_PRICE_MAGIC_YEARLY,
+    },
+    legend: {
+      monthly:
+        process.env[`NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_MONTHLY${suffix}`] ??
+        process.env.NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_MONTHLY,
+      yearly:
+        process.env[`NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_YEARLY${suffix}`] ??
+        process.env.NEXT_PUBLIC_STRIPE_GIFT_PRICE_LEGEND_YEARLY,
+    },
+  };
+}
+
 /** Subscription tiers and their limits/features */
 export const SUBSCRIPTION_TIERS = {
   free: {

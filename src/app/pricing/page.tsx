@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
   Sparkles,
@@ -10,13 +10,15 @@ import {
   Crown,
   ArrowLeft,
   Loader2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AppHeader } from "@/components/app-header";
 import { UpgradeConfirmModal } from "@/components/upgrade-confirm-modal";
 import { SUBSCRIPTION_TIERS, getTierRank } from "@/lib/stripe";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { getAffiliateCode } from "@/components/affiliate-ref-capture";
 
@@ -29,6 +31,7 @@ const TIER_ICONS: Record<string, React.ReactNode> = {
 
 export default function PricingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<string | null>(null);
@@ -44,6 +47,15 @@ export default function PricingPage() {
     amountFormatted: string;
   } | null>(null);
   const [upgradeConfirmLoading, setUpgradeConfirmLoading] = useState(false);
+  const [giftLoadingKey, setGiftLoadingKey] = useState<string | null>(null);
+  const [giftModal, setGiftModal] = useState<{
+    tierId: "spark" | "magic" | "legend";
+    tierName: string;
+  } | null>(null);
+  const [giftStep, setGiftStep] = useState<1 | 2 | 3>(1);
+  const [giftPeriod, setGiftPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
+  const giftMode = searchParams.get("intent") === "gift";
 
   useEffect(() => {
     fetch("/api/stripe/price-ids")
@@ -162,6 +174,66 @@ export default function PricingPage() {
     }
   };
 
+  const handleGiftCheckout = async (
+    tierId: "spark" | "magic" | "legend",
+    period: "monthly" | "yearly"
+  ) => {
+    if (status !== "authenticated") {
+      router.push(
+        `/sign-in?callbackUrl=${encodeURIComponent(
+          `/pricing?intent=gift&tier=${tierId}&period=${period}`
+        )}`
+      );
+      return;
+    }
+
+    const key = `${tierId}-${period}`;
+    setGiftLoadingKey(key);
+    try {
+      const res = await fetch("/api/stripe/gift-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: tierId,
+          period,
+          recipientEmail: giftRecipientEmail.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gift checkout failed");
+      if (data.url) window.location.href = data.url;
+      else throw new Error("No checkout URL");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not start gift checkout"
+      );
+    } finally {
+      setGiftLoadingKey(null);
+    }
+  };
+
+  const openGiftFlow = (
+    tierId: "spark" | "magic" | "legend",
+    tierName: string,
+    defaultPeriod: "monthly" | "yearly" = "monthly"
+  ) => {
+    setGiftModal({ tierId, tierName });
+    setGiftStep(1);
+    setGiftPeriod(defaultPeriod);
+    setGiftRecipientEmail("");
+  };
+
+  useEffect(() => {
+    if (!giftMode) return;
+    const tierParam = searchParams.get("tier");
+    if (!tierParam || !["spark", "magic", "legend"].includes(tierParam)) return;
+    const tierId = tierParam as "spark" | "magic" | "legend";
+    const periodParam = searchParams.get("period");
+    const period = periodParam === "yearly" ? "yearly" : "monthly";
+    const tierName = SUBSCRIPTION_TIERS[tierId].name;
+    openGiftFlow(tierId, tierName, period);
+  }, [giftMode, searchParams]);
+
   const paidTiers = (["spark", "magic", "legend"] as const).map((tierId) => ({
     ...SUBSCRIPTION_TIERS[tierId],
   }));
@@ -193,6 +265,30 @@ export default function PricingPage() {
             Unlock more stories and features for your little ones
           </p>
         </motion.div>
+
+        {giftMode && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.05 }}
+            className="mx-auto mt-6 max-w-2xl rounded-2xl border-2 border-primary/40 bg-primary/5 p-4"
+          >
+            <p className="text-sm font-semibold text-foreground">
+              Gift mode: pick a plan below to gift a membership.
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              You&apos;ll get a step-by-step gift flow after selecting a plan.
+            </p>
+            <div className="mt-3">
+              <Button
+                size="sm"
+                onClick={() => openGiftFlow("spark", SUBSCRIPTION_TIERS.spark.name)}
+              >
+                Start guided gift flow
+              </Button>
+            </div>
+          </motion.div>
+        )}
 
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {/* Free tier */}
@@ -318,6 +414,24 @@ export default function PricingPage() {
                           )}
                         </Button>
                       )}
+                      <div className="pt-2">
+                        <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                          Gift this plan
+                        </p>
+                        <Button
+                          variant="secondary"
+                          className="w-full"
+                          disabled={!!giftLoadingKey}
+                          onClick={() =>
+                            openGiftFlow(
+                              tier.id as "spark" | "magic" | "legend",
+                              tier.name
+                            )
+                          }
+                        >
+                          Gift this plan
+                        </Button>
+                      </div>
                     </div>
                   ) : status === "authenticated" ? (
                     <Button
@@ -331,9 +445,21 @@ export default function PricingPage() {
                       Subscribe (configure Stripe)
                     </Button>
                   ) : (
-                    <Link href="/sign-in?callbackUrl=/pricing" className="mt-6 block">
-                      <Button className="w-full">Sign in to subscribe</Button>
-                    </Link>
+                    <div className="mt-6 space-y-2">
+                      <Link href="/sign-in?callbackUrl=/pricing" className="block">
+                        <Button className="w-full">Sign in to subscribe</Button>
+                      </Link>
+                      <Link
+                        href={`/sign-in?callbackUrl=${encodeURIComponent(
+                          `/pricing?intent=gift&tier=${tier.id}&period=monthly`
+                        )}`}
+                        className="block"
+                      >
+                        <Button variant="outline" className="w-full">
+                          Sign in to gift this plan
+                        </Button>
+                      </Link>
+                    </div>
                   )}
                 </div>
               </motion.div>
@@ -355,6 +481,153 @@ export default function PricingPage() {
             isLoading={upgradeConfirmLoading}
           />
         )}
+
+        <AnimatePresence>
+          {giftModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setGiftModal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="gift-flow-title"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 id="gift-flow-title" className="text-xl font-semibold text-foreground">
+                      Gift {giftModal.tierName}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">Step {giftStep} of 3</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setGiftModal(null)}
+                    aria-label="Close gift flow"
+                  >
+                    <X className="size-5" />
+                  </Button>
+                </div>
+
+                {giftStep === 1 ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Choose which plan you want to gift.
+                    </p>
+                    <div className="grid gap-2">
+                      {(["spark", "magic", "legend"] as const).map((tierId) => (
+                        <Button
+                          key={tierId}
+                          variant={giftModal.tierId === tierId ? "default" : "outline"}
+                          className="justify-start"
+                          onClick={() =>
+                            setGiftModal({
+                              tierId,
+                              tierName: SUBSCRIPTION_TIERS[tierId].name,
+                            })
+                          }
+                        >
+                          {SUBSCRIPTION_TIERS[tierId].name}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="pt-2">
+                      <Button className="w-full" onClick={() => setGiftStep(2)}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                ) : giftStep === 2 ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Choose how long you want the gift membership to last.
+                    </p>
+                    <div className="grid gap-2">
+                      <Button
+                        variant={giftPeriod === "monthly" ? "default" : "outline"}
+                        className="justify-start"
+                        onClick={() => setGiftPeriod("monthly")}
+                      >
+                        1 month gift
+                      </Button>
+                      <Button
+                        variant={giftPeriod === "yearly" ? "default" : "outline"}
+                        className="justify-start"
+                        onClick={() => setGiftPeriod("yearly")}
+                      >
+                        1 year gift
+                      </Button>
+                    </div>
+                    <div className="pt-2">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setGiftStep(1)}
+                        >
+                          Back
+                        </Button>
+                        <Button className="flex-1" onClick={() => setGiftStep(3)}>
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Add recipient email (optional). They can still redeem with the gift code if left blank.
+                    </p>
+                    <Input
+                      type="email"
+                      placeholder="Recipient email (optional)"
+                      value={giftRecipientEmail}
+                      onChange={(e) => setGiftRecipientEmail(e.target.value)}
+                    />
+                    <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                      <p>
+                        <span className="font-medium text-foreground">Gift summary:</span>{" "}
+                        {giftModal.tierName} • {giftPeriod === "yearly" ? "1 year" : "1 month"}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setGiftStep(2)}
+                        disabled={!!giftLoadingKey}
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        disabled={!!giftLoadingKey}
+                        onClick={() =>
+                          handleGiftCheckout(giftModal.tierId, giftPeriod)
+                        }
+                      >
+                        {giftLoadingKey === `${giftModal.tierId}-${giftPeriod}` ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          "Continue to checkout"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

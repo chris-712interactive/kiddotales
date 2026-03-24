@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe, getTierFromPriceId, getStripeWebhookSecret } from "@/lib/stripe";
-import { updateSubscriptionFromStripe, getUserProfile } from "@/lib/db";
+import {
+  createGiftMembershipFromCheckout,
+  updateSubscriptionFromStripe,
+  getUserProfile,
+} from "@/lib/db";
+import { sendGiftMembershipEmails } from "@/lib/mailgun";
 import {
   getAffiliateByCode,
   getAffiliateById,
@@ -49,6 +54,39 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Gift purchase flow (one-time payment)
+        if (session.mode === "payment" && session.metadata?.kind === "gift_membership") {
+          const tier = session.metadata.tier as "spark" | "magic" | "legend" | undefined;
+          if (!tier || !["spark", "magic", "legend"].includes(tier)) break;
+          const durationMonths = Number(session.metadata.durationMonths || "1");
+          const paymentIntentId =
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id ?? null;
+
+          const gift = await createGiftMembershipFromCheckout({
+            purchaserUserId: session.metadata.purchaserUserId ?? null,
+            purchaserEmail: session.metadata.purchaserEmail ?? null,
+            recipientEmail: session.metadata.recipientEmail ?? null,
+            tier,
+            durationMonths: Number.isFinite(durationMonths) ? durationMonths : 1,
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: paymentIntentId,
+          });
+          if (gift) {
+            // Email failures should not fail Stripe webhook processing.
+            await sendGiftMembershipEmails({
+              purchaserEmail: gift.purchaserEmail,
+              recipientEmail: gift.recipientEmail,
+              giftCode: gift.code,
+              tier: gift.tier,
+              durationMonths: gift.durationMonths,
+            });
+          }
+          break;
+        }
+
         if (session.mode !== "subscription" || !session.subscription) break;
 
         const userId = session.metadata?.userId;

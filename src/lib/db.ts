@@ -1,5 +1,10 @@
 import { createSupabaseAdmin } from "./supabase";
-import { getBookLimitForTier, getStripe, type BookLimitPeriod } from "./stripe";
+import {
+  getBookLimitForTier,
+  getStripe,
+  getTierRank,
+  type BookLimitPeriod,
+} from "./stripe";
 import type { BookData, CreationMetadata, ChildProfile } from "@/types";
 
 /** @deprecated Use getBookLimitForUser with tier instead */
@@ -21,9 +26,228 @@ export type UserProfile = {
   tierUpgradeAt?: string | null;
   tierBeforeUpgrade?: string | null;
   referredByAffiliateId?: string | null;
+  giftMembershipExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string | null;
 };
+
+export type GiftMembership = {
+  id: string;
+  code: string;
+  purchaserUserId: string | null;
+  purchaserEmail: string | null;
+  recipientEmail: string | null;
+  tier: "spark" | "magic" | "legend";
+  durationMonths: number;
+  status: "purchased" | "redeemed" | "expired" | "cancelled";
+  stripeCheckoutSessionId: string | null;
+  stripePaymentIntentId: string | null;
+  redeemedByUserId: string | null;
+  redeemedAt: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function generateGiftCode(): string {
+  return `KT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+}
+
+function mapGiftMembershipRow(row: Record<string, unknown>): GiftMembership {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    purchaserUserId: (row.purchaser_user_id as string) ?? null,
+    purchaserEmail: (row.purchaser_email as string) ?? null,
+    recipientEmail: (row.recipient_email as string) ?? null,
+    tier: row.tier as GiftMembership["tier"],
+    durationMonths: Number(row.duration_months) || 1,
+    status: row.status as GiftMembership["status"],
+    stripeCheckoutSessionId: (row.stripe_checkout_session_id as string) ?? null,
+    stripePaymentIntentId: (row.stripe_payment_intent_id as string) ?? null,
+    redeemedByUserId: (row.redeemed_by_user_id as string) ?? null,
+    redeemedAt: (row.redeemed_at as string) ?? null,
+    startsAt: (row.starts_at as string) ?? null,
+    endsAt: (row.ends_at as string) ?? null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+/** Get active gift membership for a user, if any. */
+export async function getActiveGiftMembershipForUser(
+  userId: string
+): Promise<GiftMembership | null> {
+  const supabase = createSupabaseAdmin();
+  const now = new Date().toISOString();
+  const { data } = await supabase
+    .from("gift_memberships")
+    .select("*")
+    .eq("redeemed_by_user_id", userId)
+    .eq("status", "redeemed")
+    .lte("starts_at", now)
+    .gt("ends_at", now);
+
+  if (!data?.length) return null;
+  const sorted = [...data].sort((a, b) => {
+    const tierDiff =
+      getTierRank(String(b.tier)) - getTierRank(String(a.tier));
+    if (tierDiff !== 0) return tierDiff;
+    return (
+      new Date(String(b.ends_at)).getTime() -
+      new Date(String(a.ends_at)).getTime()
+    );
+  });
+  return mapGiftMembershipRow(sorted[0] as unknown as Record<string, unknown>);
+}
+
+/** Create gift membership row from paid Stripe checkout session. */
+export async function createGiftMembershipFromCheckout(params: {
+  purchaserUserId?: string | null;
+  purchaserEmail?: string | null;
+  recipientEmail?: string | null;
+  tier: "spark" | "magic" | "legend";
+  durationMonths: number;
+  stripeCheckoutSessionId: string;
+  stripePaymentIntentId?: string | null;
+}): Promise<GiftMembership | null> {
+  const supabase = createSupabaseAdmin();
+  const existing = await supabase
+    .from("gift_memberships")
+    .select("*")
+    .eq("stripe_checkout_session_id", params.stripeCheckoutSessionId)
+    .maybeSingle();
+  if (existing.data) {
+    return mapGiftMembershipRow(existing.data as unknown as Record<string, unknown>);
+  }
+
+  const row = {
+    code: generateGiftCode(),
+    purchaser_user_id: params.purchaserUserId ?? null,
+    purchaser_email: params.purchaserEmail ?? null,
+    recipient_email: params.recipientEmail?.trim().toLowerCase() ?? null,
+    tier: params.tier,
+    duration_months: Math.max(1, params.durationMonths),
+    status: "purchased",
+    stripe_checkout_session_id: params.stripeCheckoutSessionId,
+    stripe_payment_intent_id: params.stripePaymentIntentId ?? null,
+  };
+
+  const { data, error } = await supabase
+    .from("gift_memberships")
+    .insert(row)
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  return mapGiftMembershipRow(data as unknown as Record<string, unknown>);
+}
+
+/** Redeem a gift code for the current user. */
+export async function redeemGiftMembershipCode(
+  userId: string,
+  codeInput: string
+): Promise<{ ok: boolean; gift?: GiftMembership; error?: string }> {
+  const code = codeInput.trim().toUpperCase();
+  if (!code) return { ok: false, error: "Gift code is required" };
+
+  const supabase = createSupabaseAdmin();
+  const { data: giftRow, error } = await supabase
+    .from("gift_memberships")
+    .select("*")
+    .eq("code", code)
+    .single();
+
+  if (error || !giftRow) return { ok: false, error: "Invalid gift code" };
+  const gift = mapGiftMembershipRow(giftRow as unknown as Record<string, unknown>);
+  if (gift.status !== "purchased") {
+    return { ok: false, error: "Gift code has already been redeemed" };
+  }
+
+  const now = new Date();
+  let startAt = now;
+  const profile = await getUserProfile(userId);
+  if (
+    profile?.stripeSubscriptionId &&
+    (profile.stripeSubscriptionStatus === "active" ||
+      profile.stripeSubscriptionStatus === "trialing")
+  ) {
+    const stripe = getStripe();
+    if (stripe) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(profile.stripeSubscriptionId, {
+          expand: ["items.data"],
+        });
+        const periodEnd = sub.items?.data?.[0]?.current_period_end;
+        if (typeof periodEnd === "number") {
+          const candidate = new Date(periodEnd * 1000);
+          if (candidate > startAt) startAt = candidate;
+        }
+      } catch {
+        // fallback to immediate start
+      }
+    }
+  }
+
+  const endAt = new Date(startAt);
+  endAt.setMonth(endAt.getMonth() + gift.durationMonths);
+
+  const { data: redeemedRow, error: redeemErr } = await supabase
+    .from("gift_memberships")
+    .update({
+      status: "redeemed",
+      redeemed_by_user_id: userId,
+      redeemed_at: now.toISOString(),
+      starts_at: startAt.toISOString(),
+      ends_at: endAt.toISOString(),
+      updated_at: now.toISOString(),
+    })
+    .eq("id", gift.id)
+    .eq("status", "purchased")
+    .is("redeemed_by_user_id", null)
+    .select("*")
+    .single();
+  if (redeemErr || !redeemedRow) {
+    return { ok: false, error: "Gift code is no longer available" };
+  }
+
+  return {
+    ok: true,
+    gift: mapGiftMembershipRow(redeemedRow as unknown as Record<string, unknown>),
+  };
+}
+
+/** List gifts purchased by a user (most recent first). */
+export async function listPurchasedGiftMemberships(
+  purchaserUserId: string
+): Promise<GiftMembership[]> {
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from("gift_memberships")
+    .select("*")
+    .eq("purchaser_user_id", purchaserUserId)
+    .order("created_at", { ascending: false });
+  if (!data?.length) return [];
+  return data.map((row) =>
+    mapGiftMembershipRow(row as unknown as Record<string, unknown>)
+  );
+}
+
+/** Get a purchased gift by ID and purchaser ownership. */
+export async function getPurchasedGiftMembershipById(
+  giftId: string,
+  purchaserUserId: string
+): Promise<GiftMembership | null> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("gift_memberships")
+    .select("*")
+    .eq("id", giftId)
+    .eq("purchaser_user_id", purchaserUserId)
+    .single();
+  if (error || !data) return null;
+  return mapGiftMembershipRow(data as unknown as Record<string, unknown>);
+}
 
 /** Ensure user exists in users table. */
 export async function ensureUser(userId: string, email?: string | null): Promise<void> {
@@ -46,7 +270,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   if (error || !data) return null;
 
   const theme = data.theme === "dark" ? "dark" : "light";
-  return {
+  const profile: UserProfile = {
     id: data.id,
     email: data.email ?? null,
     displayName: data.display_name ?? null,
@@ -62,9 +286,21 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     tierUpgradeAt: data.tier_upgrade_at ?? null,
     tierBeforeUpgrade: data.tier_before_upgrade ?? null,
     referredByAffiliateId: data.referred_by_affiliate_id ?? null,
+    giftMembershipExpiresAt: null,
     createdAt: data.created_at,
     updatedAt: data.updated_at ?? null,
   };
+
+  const activeGift = await getActiveGiftMembershipForUser(userId);
+  if (
+    activeGift &&
+    getTierRank(activeGift.tier) > getTierRank(profile.subscriptionTier)
+  ) {
+    profile.subscriptionTier = activeGift.tier;
+    profile.giftMembershipExpiresAt = activeGift.endsAt;
+  }
+
+  return profile;
 }
 
 /** Get book creation limit and period for user based on subscription tier.

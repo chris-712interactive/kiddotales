@@ -57,6 +57,18 @@ type FeedbackMessage = {
   created_at: string;
 };
 
+type GiftMembership = {
+  id: string;
+  code: string;
+  tier: "spark" | "magic" | "legend";
+  durationMonths: number;
+  status: "purchased" | "redeemed" | "expired" | "cancelled";
+  recipientEmail: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+};
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<SettingsData | null>(null);
@@ -67,6 +79,14 @@ function SettingsContent() {
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [revokeLoading, setRevokeLoading] = useState(false);
+  const [giftCode, setGiftCode] = useState("");
+  const [redeemingGift, setRedeemingGift] = useState(false);
+  const [giftTier, setGiftTier] = useState<"spark" | "magic" | "legend">("spark");
+  const [giftPeriod, setGiftPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
+  const [giftCheckoutLoading, setGiftCheckoutLoading] = useState(false);
+  const [myGifts, setMyGifts] = useState<GiftMembership[]>([]);
+  const [resendingGiftId, setResendingGiftId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkout = searchParams.get("checkout");
@@ -98,6 +118,11 @@ function SettingsContent() {
         .catch(() => {});
     } else if (checkout === "success") {
       toast.success("Subscription activated! Thank you for upgrading.");
+    }
+
+    if (searchParams.get("gift") === "purchased") {
+      toast.success("Gift purchased! Your gift code is in the Gifts section below.");
+      window.history.replaceState({}, "", "/settings");
     }
   }, [searchParams]);
 
@@ -152,7 +177,97 @@ function SettingsContent() {
       })
       .catch(() => toast.error("Could not load settings"))
       .finally(() => setLoading(false));
+
+    fetch("/api/gifts/my")
+      .then((r) => (r.ok ? r.json() : { gifts: [] }))
+      .then((res) => setMyGifts((res.gifts as GiftMembership[]) ?? []))
+      .catch(() => {});
   }, []);
+
+  const refreshMyGifts = async () => {
+    try {
+      const r = await fetch("/api/gifts/my");
+      if (!r.ok) return;
+      const res = await r.json();
+      setMyGifts((res.gifts as GiftMembership[]) ?? []);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleStartGiftCheckout = async () => {
+    setGiftCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/gift-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: giftTier,
+          period: giftPeriod,
+          recipientEmail: giftRecipientEmail.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gift checkout failed");
+      if (json.url) window.location.href = json.url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not start gift checkout");
+    } finally {
+      setGiftCheckoutLoading(false);
+    }
+  };
+
+  const handleRedeemGift = async () => {
+    if (!giftCode.trim()) {
+      toast.error("Enter a gift code");
+      return;
+    }
+    setRedeemingGift(true);
+    try {
+      const res = await fetch("/api/gifts/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: giftCode.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not redeem gift");
+      toast.success(json.message || "Gift redeemed!");
+      setGiftCode("");
+
+      const settingsRes = await fetch("/api/user/settings");
+      if (settingsRes.ok) {
+        const fresh = await settingsRes.json();
+        setData(fresh);
+        setDisplayName(fresh.profile?.displayName ?? "");
+        setPhone(fresh.profile?.phone ?? "");
+      }
+      await refreshMyGifts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not redeem gift");
+    } finally {
+      setRedeemingGift(false);
+    }
+  };
+
+  const handleResendGiftEmail = async (giftId: string) => {
+    setResendingGiftId(giftId);
+    try {
+      const res = await fetch("/api/gifts/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ giftId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not resend gift email");
+      toast.success(json.message || "Gift email resent");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not resend gift email"
+      );
+    } finally {
+      setResendingGiftId(null);
+    }
+  };
 
 
   const handleRevokeConsent = async () => {
@@ -439,6 +554,142 @@ function SettingsContent() {
                   </Link>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Gifts */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="size-5" />
+                Gifts
+              </CardTitle>
+              <CardDescription>
+                Gift a membership to someone else, or redeem a gift code you received.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-3 rounded-xl border-2 border-border bg-muted/40 p-4">
+                <p className="font-medium">Buy a gift membership</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="giftTier">Plan</Label>
+                    <select
+                      id="giftTier"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={giftTier}
+                      onChange={(e) =>
+                        setGiftTier(e.target.value as "spark" | "magic" | "legend")
+                      }
+                    >
+                      <option value="spark">Spark</option>
+                      <option value="magic">Magic</option>
+                      <option value="legend">Legend</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="giftPeriod">Duration</Label>
+                    <select
+                      id="giftPeriod"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={giftPeriod}
+                      onChange={(e) =>
+                        setGiftPeriod(e.target.value as "monthly" | "yearly")
+                      }
+                    >
+                      <option value="monthly">1 month gift</option>
+                      <option value="yearly">1 year gift</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="giftRecipientEmail">Recipient email (optional)</Label>
+                  <Input
+                    id="giftRecipientEmail"
+                    type="email"
+                    placeholder="parent@example.com"
+                    value={giftRecipientEmail}
+                    onChange={(e) => setGiftRecipientEmail(e.target.value)}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  disabled={giftCheckoutLoading}
+                  onClick={handleStartGiftCheckout}
+                >
+                  {giftCheckoutLoading ? (
+                    <Loader2 className="mr-1 size-4 animate-spin" />
+                  ) : null}
+                  Buy gift
+                </Button>
+              </div>
+
+              <div className="space-y-3 rounded-xl border-2 border-border bg-muted/40 p-4">
+                <p className="font-medium">Redeem a gift code</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    placeholder="KT-XXXXXXXXXXXX"
+                    value={giftCode}
+                    onChange={(e) => setGiftCode(e.target.value.toUpperCase())}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={redeemingGift}
+                    onClick={handleRedeemGift}
+                  >
+                    {redeemingGift ? (
+                      <Loader2 className="mr-1 size-4 animate-spin" />
+                    ) : null}
+                    Redeem
+                  </Button>
+                </div>
+              </div>
+
+              {myGifts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">My purchased gift codes</p>
+                  <div className="space-y-2">
+                    {myGifts.slice(0, 6).map((gift) => (
+                      <div
+                        key={gift.id}
+                        className="flex flex-col gap-1 rounded-lg border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="font-mono font-medium">{gift.code}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {gift.tier} • {gift.durationMonths === 12 ? "1 year" : "1 month"} •{" "}
+                            {gift.status}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(gift.code).catch(() => {});
+                              toast.success("Gift code copied");
+                            }}
+                          >
+                            Copy code
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={resendingGiftId === gift.id}
+                            onClick={() => handleResendGiftEmail(gift.id)}
+                          >
+                            {resendingGiftId === gift.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              "Resend email"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

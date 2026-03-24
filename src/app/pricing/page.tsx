@@ -55,6 +55,7 @@ export default function PricingPage() {
   const [giftStep, setGiftStep] = useState<1 | 2 | 3>(1);
   const [giftPeriod, setGiftPeriod] = useState<"monthly" | "yearly">("monthly");
   const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
+  const [sendGiftEmailToRecipient, setSendGiftEmailToRecipient] = useState(false);
   const giftMode = searchParams.get("intent") === "gift";
 
   useEffect(() => {
@@ -196,7 +197,10 @@ export default function PricingPage() {
         body: JSON.stringify({
           tier: tierId,
           period,
-          recipientEmail: giftRecipientEmail.trim() || undefined,
+          sendRecipientEmail: sendGiftEmailToRecipient,
+          recipientEmail: sendGiftEmailToRecipient
+            ? giftRecipientEmail.trim() || undefined
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -221,6 +225,7 @@ export default function PricingPage() {
     setGiftStep(1);
     setGiftPeriod(defaultPeriod);
     setGiftRecipientEmail("");
+    setSendGiftEmailToRecipient(false);
   };
 
   useEffect(() => {
@@ -585,18 +590,35 @@ export default function PricingPage() {
                 ) : (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Add recipient email (optional). They can still redeem with the gift code if left blank.
+                      Choose whether we should email the recipient directly.
                     </p>
-                    <Input
-                      type="email"
-                      placeholder="Recipient email (optional)"
-                      value={giftRecipientEmail}
-                      onChange={(e) => setGiftRecipientEmail(e.target.value)}
-                    />
+                    <label className="flex items-start gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={sendGiftEmailToRecipient}
+                        onChange={(e) => setSendGiftEmailToRecipient(e.target.checked)}
+                      />
+                      Email the recipient their gift code now
+                    </label>
+                    {sendGiftEmailToRecipient && (
+                      <Input
+                        type="email"
+                        placeholder="Recipient email"
+                        value={giftRecipientEmail}
+                        onChange={(e) => setGiftRecipientEmail(e.target.value)}
+                      />
+                    )}
                     <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                       <p>
                         <span className="font-medium text-foreground">Gift summary:</span>{" "}
                         {giftModal.tierName} • {giftPeriod === "yearly" ? "1 year" : "1 month"}
+                      </p>
+                      <p className="mt-1">
+                        Recipient email:{" "}
+                        {sendGiftEmailToRecipient
+                          ? (giftRecipientEmail.trim() || "(missing)")
+                          : "No (purchaser only)"}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -611,9 +633,16 @@ export default function PricingPage() {
                       <Button
                         className="flex-1"
                         disabled={!!giftLoadingKey}
-                        onClick={() =>
-                          handleGiftCheckout(giftModal.tierId, giftPeriod)
-                        }
+                        onClick={() => {
+                          if (
+                            sendGiftEmailToRecipient &&
+                            !giftRecipientEmail.trim()
+                          ) {
+                            toast.error("Please enter recipient email or uncheck email option.");
+                            return;
+                          }
+                          handleGiftCheckout(giftModal.tierId, giftPeriod);
+                        }}
                       >
                         {giftLoadingKey === `${giftModal.tierId}-${giftPeriod}` ? (
                           <Loader2 className="size-4 animate-spin" />

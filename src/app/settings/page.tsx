@@ -84,6 +84,7 @@ function SettingsContent() {
   const [giftTier, setGiftTier] = useState<"spark" | "magic" | "legend">("spark");
   const [giftPeriod, setGiftPeriod] = useState<"monthly" | "yearly">("monthly");
   const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
+  const [sendGiftEmailToRecipient, setSendGiftEmailToRecipient] = useState(false);
   const [giftCheckoutLoading, setGiftCheckoutLoading] = useState(false);
   const [myGifts, setMyGifts] = useState<GiftMembership[]>([]);
   const [resendingGiftId, setResendingGiftId] = useState<string | null>(null);
@@ -121,7 +122,7 @@ function SettingsContent() {
     }
 
     if (searchParams.get("gift") === "purchased") {
-      toast.success("Gift purchased! Your gift code is in the Gifts section below.");
+      toast.success("Gift purchased! Your gift code will appear after webhook sync.");
       window.history.replaceState({}, "", "/settings");
     }
   }, [searchParams]);
@@ -196,6 +197,10 @@ function SettingsContent() {
   };
 
   const handleStartGiftCheckout = async () => {
+    if (sendGiftEmailToRecipient && !giftRecipientEmail.trim()) {
+      toast.error("Enter recipient email or uncheck recipient email option.");
+      return;
+    }
     setGiftCheckoutLoading(true);
     try {
       const res = await fetch("/api/stripe/gift-checkout", {
@@ -204,7 +209,10 @@ function SettingsContent() {
         body: JSON.stringify({
           tier: giftTier,
           period: giftPeriod,
-          recipientEmail: giftRecipientEmail.trim() || undefined,
+          sendRecipientEmail: sendGiftEmailToRecipient,
+          recipientEmail: sendGiftEmailToRecipient
+            ? giftRecipientEmail.trim() || undefined
+            : undefined,
         }),
       });
       const json = await res.json();
@@ -604,13 +612,24 @@ function SettingsContent() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="giftRecipientEmail">Recipient email (optional)</Label>
-                  <Input
-                    id="giftRecipientEmail"
-                    type="email"
-                    placeholder="parent@example.com"
-                    value={giftRecipientEmail}
-                    onChange={(e) => setGiftRecipientEmail(e.target.value)}
-                  />
+                  <label className="flex items-start gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={sendGiftEmailToRecipient}
+                      onChange={(e) => setSendGiftEmailToRecipient(e.target.checked)}
+                    />
+                    Email recipient directly with gift code
+                  </label>
+                  {sendGiftEmailToRecipient && (
+                    <Input
+                      id="giftRecipientEmail"
+                      type="email"
+                      placeholder="parent@example.com"
+                      value={giftRecipientEmail}
+                      onChange={(e) => setGiftRecipientEmail(e.target.value)}
+                    />
+                  )}
                 </div>
                 <Button
                   size="sm"

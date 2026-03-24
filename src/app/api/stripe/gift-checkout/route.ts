@@ -21,7 +21,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { tier?: GiftTier; period?: GiftPeriod; recipientEmail?: string };
+  let body: {
+    tier?: GiftTier;
+    period?: GiftPeriod;
+    recipientEmail?: string;
+    sendRecipientEmail?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -30,7 +35,15 @@ export async function POST(req: NextRequest) {
 
   const tier = body.tier;
   const period = body.period;
+  const sendRecipientEmail = body.sendRecipientEmail === true;
   const recipientEmail = body.recipientEmail?.trim().toLowerCase();
+  if (sendRecipientEmail && !recipientEmail) {
+    return NextResponse.json(
+      { error: "Recipient email is required when recipient email option is enabled" },
+      { status: 400 }
+    );
+  }
+
   if (!tier || !["spark", "magic", "legend"].includes(tier)) {
     return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
   }
@@ -67,7 +80,7 @@ export async function POST(req: NextRequest) {
         kind: "gift_membership",
         purchaserUserId: userId,
         purchaserEmail: session.user.email,
-        recipientEmail: recipientEmail ?? "",
+        recipientEmail: sendRecipientEmail ? recipientEmail ?? "" : "",
         tier,
         period,
         durationMonths: String(durationMonths),

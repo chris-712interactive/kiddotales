@@ -1,6 +1,6 @@
 /**
  * KiddoTales prompts and constants
- * System prompt for GPT-4o to generate personalized bedtime stories
+ * Story generation uses STORY_SYSTEM_PROMPT from @/lib/prompts (this duplicate is legacy / unused by the API).
  */
 
 export const STORY_SYSTEM_PROMPT = `You are a magical children's story writer. Create personalized bedtime stories that are warm, gentle, and perfect for young children.
@@ -72,7 +72,9 @@ export const getStoryUserPrompt = (params: {
 - Life lesson to teach: ${params.lifeLesson}
 - Art style for images: ${artStyleDescriptions[params.artStyle] || params.artStyle}${appearanceLine}${photoRealisticHint}
 
-Generate the complete story as JSON. Remember: exactly 8 pages, each with text and a detailed imagePrompt.`;
+Generate the complete story as JSON. Remember: exactly 8 pages, each with text and a detailed imagePrompt.
+
+Content must stay innocent for ages 3-10: no adult, romantic, or sexual themes; no gender-transition or sexuality topics; illustration prompts must show everyone fully modestly clothed (no nudity, bathing, or undressing scenes).`;
 };
 
 export const ART_STYLE_PROMPTS: Record<string, string> = {

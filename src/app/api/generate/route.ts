@@ -65,7 +65,10 @@ function buildAppearancePrefix(
   if (a.glasses) parts.push("wearing glasses");
   if (a.freckles) parts.push("freckles");
 
-  return parts.join(", ") + ", human ears, no animal features, children's book illustration style.";
+  return (
+    parts.join(", ") +
+    ", human ears, no animal features, modest age-appropriate fully clothed outfit, children's book illustration style."
+  );
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -363,12 +366,14 @@ export async function POST(request: NextRequest) {
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
+    const imageSafetySuffix =
+      " G-rated wholesome children's picture book: every person fully and modestly clothed, no nudity or partial nudity, no underwear visible, no bathing or changing clothes, no romantic or sensual poses, family-safe imagery only.";
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
     const fullCoverPrompt = effectiveSecondaryChar
-      ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`
-      : `${characterPrefix}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}`;
+      ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`
+      : `${characterPrefix}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`;
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
@@ -408,7 +413,7 @@ export async function POST(request: NextRequest) {
       const scenePart = includeSecondary
         ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}. ${styleSuffix}`
         : `${characterPrefix}. ${promptText}. ${styleSuffix}`;
-      const fullPrompt = `${scenePart}. ${antiHybridSuffix}`;
+      const fullPrompt = `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const output = await replicate.run(

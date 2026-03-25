@@ -384,8 +384,8 @@ export default function LandingPage() {
     <div
       className={
         showDashboard
-          ? "min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]"
-          : "min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]"
+          ? "flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]"
+          : "flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]"
       }
     >
       {!showDashboard && <LandingThemeLock />}
@@ -394,7 +394,7 @@ export default function LandingPage() {
       <main
         className={`mx-auto ${
           showDashboard ? "max-w-4xl" : "max-w-6xl"
-        } px-4 pb-16 pt-8 md:px-8`}
+        } w-full min-h-0 flex-1 overflow-y-auto px-4 pb-16 pt-8 md:px-8`}
       >
         {showDashboard ? (
           <>

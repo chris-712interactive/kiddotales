@@ -92,7 +92,7 @@ export default function ChildProfilesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
       <AppHeader
         pageActions={
           <Link href="/settings">
@@ -104,7 +104,7 @@ export default function ChildProfilesPage() {
         }
       />
 
-      <main className="mx-auto max-w-2xl px-4 pb-16 pt-4 md:px-8">
+      <main className="mx-auto w-full min-h-0 max-w-2xl flex-1 overflow-y-auto px-4 pb-16 pt-4 md:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

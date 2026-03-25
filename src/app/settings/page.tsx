@@ -347,7 +347,7 @@ function SettingsContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+      <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
         <AppHeader
           pageActions={
             <Link href="/">
@@ -358,7 +358,7 @@ function SettingsContent() {
             </Link>
           }
         />
-        <main className="mx-auto max-w-2xl px-4 py-12">
+        <main className="mx-auto w-full min-h-0 max-w-2xl flex-1 overflow-y-auto px-4 py-12">
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Sparkles className="size-5 animate-pulse" />
             Loading settings…
@@ -370,7 +370,7 @@ function SettingsContent() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
+      <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
         <AppHeader
           pageActions={
             <Link href="/">
@@ -381,7 +381,7 @@ function SettingsContent() {
             </Link>
           }
         />
-        <main className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <main className="mx-auto w-full min-h-0 max-w-2xl flex-1 overflow-y-auto px-4 py-12 text-center">
           <p className="text-muted-foreground">Could not load settings.</p>
           <Link href="/">
             <Button variant="outline" className="mt-4">
@@ -449,7 +449,7 @@ function SettingsContent() {
   const activeSection = sections.find((section) => section.id === selectedSection) ?? sections[0];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
       <AppHeader
         pageActions={
           <Link href="/">
@@ -461,7 +461,7 @@ function SettingsContent() {
         }
       />
 
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-4 md:px-8">
+      <main className="mx-auto w-full min-h-0 max-w-6xl flex-1 overflow-y-auto px-4 pb-16 pt-4 md:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -926,8 +926,8 @@ function SettingsContent() {
 
 function SettingsLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
-      <main className="mx-auto flex max-w-2xl items-center justify-center px-4 py-24">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+      <main className="mx-auto flex w-full min-h-0 max-w-2xl flex-1 items-center justify-center px-4 py-24">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
           Loading settings…

@@ -88,7 +88,7 @@ export default function RootLayout({
               Skip to main content
             </a>
             <div className="flex min-h-screen flex-col">
-              <main id="main" className="flex-1">{children}</main>
+              <main id="main" className="flex min-h-0 flex-1 flex-col">{children}</main>
               <Footer />
             </div>
           <Toaster

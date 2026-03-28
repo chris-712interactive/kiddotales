@@ -23,6 +23,9 @@ import {
   Heart,
   Palette,
   CheckCircle2,
+  Lightbulb,
+  Eye,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +88,79 @@ const ART_STYLE_CARDS = [
     image: undefined,
   },
 ];
+
+const CREATE_FLOW_STEPS: { num: number; label: string; icon: LucideIcon }[] = [
+  { num: 1, label: "Start", icon: CheckCircle2 },
+  { num: 2, label: "Child", icon: User },
+  { num: 3, label: "Look", icon: Eye },
+  { num: 4, label: "Interests", icon: Heart },
+  { num: 5, label: "Lesson", icon: Lightbulb },
+  { num: 6, label: "Art style", icon: Palette },
+  { num: 7, label: "Voice", icon: Volume2 },
+];
+
+/** Mobile step strip: prev | current | next, or 2 pills on first/last step */
+function mobileVisibleStepNumbers(total: number, current: number): number[] {
+  if (total <= 1) return [1];
+  if (current === 1) return [1, 2];
+  if (current === total) return [total - 1, total];
+  return [current - 1, current, current + 1];
+}
+
+function CreationStepButton({
+  num,
+  label,
+  icon: Icon,
+  currentStep,
+  canProceedFromStep,
+  onPickStep,
+  className,
+  iconClassName,
+  labelClassName,
+  badgeClassName,
+}: {
+  num: number;
+  label: string;
+  icon: LucideIcon;
+  currentStep: number;
+  canProceedFromStep: (step: number) => boolean;
+  onPickStep: (n: number) => void;
+  className?: string;
+  iconClassName?: string;
+  labelClassName?: string;
+  badgeClassName?: string;
+}) {
+  const canGoTo =
+    num <= currentStep || (num === currentStep + 1 && canProceedFromStep(currentStep));
+  return (
+    <button
+      type="button"
+      onClick={() => canGoTo && onPickStep(num)}
+      disabled={!canGoTo}
+      aria-current={currentStep === num ? "step" : undefined}
+      className={cn(
+        "touch-manipulation transition-all active:scale-[0.98] sm:active:scale-100",
+        currentStep === num
+          ? "bg-primary text-primary-foreground shadow-md"
+          : num < currentStep
+            ? "bg-primary/20 text-primary hover:bg-primary/30"
+            : "bg-muted/50 text-muted-foreground",
+        className
+      )}
+    >
+      <Icon className={cn("shrink-0", iconClassName)} aria-hidden />
+      <span className={labelClassName}>{label}</span>
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-full bg-current/20 font-semibold",
+          badgeClassName
+        )}
+      >
+        {num}
+      </span>
+    </button>
+  );
+}
 
 const SURPRISE_EXAMPLES: CreateFormData[] = [
   {
@@ -158,11 +234,11 @@ function CreatePageContent() {
   const [currentStep, setCurrentStep] = useState(1);
   const [stepDirection, setStepDirection] = useState<"forward" | "back">("forward");
   const [settingsFetched, setSettingsFetched] = useState(false);
-  // Voice step only when plan allows AI voice; when auth but not yet fetched, show 5 steps to avoid skipping
+  // Voice step only when plan allows AI voice; when auth but not yet fetched, assume voice step to avoid skipping
   const TOTAL_STEPS =
     settingsFetched
-      ? (voiceOptions.length > 0 ? 5 : 4)
-      : (status === "authenticated" ? 5 : 4);
+      ? (voiceOptions.length > 0 ? 7 : 6)
+      : (status === "authenticated" ? 7 : 6);
 
   const goToStep = (step: number) => {
     if (step < 1 || step > TOTAL_STEPS) return;
@@ -178,7 +254,9 @@ function CreatePageContent() {
   const canProceedFromStep = (step: number): boolean => {
     if (step === 1) return parentGuardianConfirmed;
     if (step === 2) return !!form.childName.trim();
-    if (step === 3) return form.interests.length > 0 && (form.lifeLesson !== "custom" || !!customLifeLesson.trim());
+    if (step === 3) return true; // appearance optional
+    if (step === 4) return form.interests.length > 0;
+    if (step === 5) return form.lifeLesson !== "custom" || !!customLifeLesson.trim();
     return true;
   };
 
@@ -529,9 +607,13 @@ function CreatePageContent() {
     );
   }
 
+  const flowSteps = CREATE_FLOW_STEPS.slice(0, TOTAL_STEPS);
+  const mobileStepNums = mobileVisibleStepNumbers(TOTAL_STEPS, currentStep);
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
       <AppHeader
+        className="shrink-0"
         pageActions={
           <Link href="/">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
@@ -542,8 +624,9 @@ function CreatePageContent() {
         }
       />
 
-      <main className="mx-auto max-w-2xl px-4 pb-24 sm:pb-16">
+      <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
         <motion.div
+          className="shrink-0"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
@@ -557,45 +640,61 @@ function CreatePageContent() {
             </p>
           )}
 
-          {/* Step indicator */}
-          <div className="mb-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-            {[
-              { num: 1, label: "Start", icon: CheckCircle2 },
-              { num: 2, label: "Child", icon: User },
-              { num: 3, label: "Theme", icon: Heart },
-              { num: 4, label: "Art style", icon: Palette },
-              { num: 5, label: "Voice", icon: Volume2 },
-            ]
-              .slice(0, TOTAL_STEPS)
-              .map(({ num, label, icon: Icon }) => {
-              const canGoTo = num <= currentStep || (num === currentStep + 1 && canProceedFromStep(currentStep));
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => canGoTo && goToStep(num)}
-                  disabled={!canGoTo}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all sm:gap-2 sm:px-4",
-                    currentStep === num
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : num < currentStep
-                        ? "bg-primary/20 text-primary hover:bg-primary/30"
-                        : "bg-muted/50 text-muted-foreground"
-                  )}
-                >
-                  <Icon className="size-3.5 sm:size-4" />
-                  <span className="hidden sm:inline">{label}</span>
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-current/20 text-xs sm:size-6">
-                    {num}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Mobile: prev | current | next (2 pills on first/last); sm+: all steps */}
+          <div className="mb-4 sm:mb-6" role="navigation" aria-label="Creation steps">
+            <div
+              className={cn(
+                "mx-auto grid w-full max-w-md gap-2 sm:hidden",
+                mobileStepNums.length === 1
+                  ? "grid-cols-1"
+                  : mobileStepNums.length === 2
+                    ? "grid-cols-2"
+                    : "grid-cols-3"
+              )}
+            >
+              {mobileStepNums.map((num) => {
+                const def = flowSteps.find((s) => s.num === num);
+                if (!def) return null;
+                return (
+                  <CreationStepButton
+                    key={num}
+                    num={def.num}
+                    label={def.label}
+                    icon={def.icon}
+                    currentStep={currentStep}
+                    canProceedFromStep={canProceedFromStep}
+                    onPickStep={goToStep}
+                    className="flex min-h-[5.25rem] w-full min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2.5 text-xs"
+                    iconClassName="size-5"
+                    labelClassName="line-clamp-2 px-0.5 text-center text-[11px] leading-snug"
+                    badgeClassName="size-6 text-xs"
+                  />
+                );
+              })}
+            </div>
 
-          <form onSubmit={handleSubmit} className="space-y-0">
-            <div className="min-h-[320px] pb-24 sm:min-h-[360px] sm:pb-0">
+            <div className="hidden flex-wrap items-center justify-center gap-2 sm:flex">
+              {flowSteps.map((def) => (
+                <CreationStepButton
+                  key={def.num}
+                  num={def.num}
+                  label={def.label}
+                  icon={def.icon}
+                  currentStep={currentStep}
+                  canProceedFromStep={canProceedFromStep}
+                  onPickStep={goToStep}
+                  className="flex min-h-10 items-center gap-2 rounded-full px-4 py-1.5 text-sm"
+                  iconClassName="size-4"
+                  labelClassName="max-w-[5.5rem] truncate sm:max-w-none"
+                  badgeClassName="size-6 text-xs"
+                />
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain px-2.5 pb-3 pt-1.5 [-webkit-overflow-scrolling:touch] sm:px-3">
               <AnimatePresence mode="wait">
                 {currentStep === 1 && (
                   <motion.div
@@ -606,17 +705,17 @@ function CreatePageContent() {
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <p className="text-center text-muted-foreground sm:mb-4">
+                    <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
                       Let&apos;s get started. We&apos;ll create a magical story just for your child.
                     </p>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50">
+                    <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl border-2 border-border bg-card p-4 shadow-sm transition-colors active:bg-muted/50 hover:bg-muted/50">
                       <input
                         type="checkbox"
                         checked={parentGuardianConfirmed}
                         onChange={(e) => setParentGuardianConfirmed(e.target.checked)}
-                        className="mt-1 rounded border-2"
+                        className="mt-0.5 size-5 shrink-0 rounded border-2 touch-manipulation"
                       />
-                      <span className="text-sm text-foreground">
+                      <span className="text-base leading-snug text-foreground sm:text-sm">
                         I am a parent or guardian creating a story for my child.
                       </span>
                     </label>
@@ -670,6 +769,7 @@ function CreatePageContent() {
                             type="button"
                             variant={selectedProfileId === null ? "default" : "outline"}
                             size="sm"
+                            className="min-h-11 sm:min-h-9"
                             onClick={() => applyProfile(null)}
                           >
                             Start fresh
@@ -680,6 +780,7 @@ function CreatePageContent() {
                               type="button"
                               variant={selectedProfileId === p.id ? "default" : "outline"}
                               size="sm"
+                              className="min-h-11 sm:min-h-9"
                               onClick={() => applyProfile(p)}
                             >
                               {p.name}
@@ -700,7 +801,7 @@ function CreatePageContent() {
                     <Button
                       type="button"
                       variant="ghost"
-                      className="w-full"
+                      className="min-h-11 w-full touch-manipulation"
                       onClick={surpriseMe}
                     >
                       <Sparkles className="mr-2 size-4" />
@@ -718,27 +819,30 @@ function CreatePageContent() {
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <p className="text-center text-muted-foreground sm:mb-4">
-                      Tell us about your child so we can personalize the story.
+                    <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
+                      Tell us the basics so we can personalize the story.
                     </p>
                     {/* Child's name + voice */}
                     <div className="space-y-2">
                       <Label htmlFor="childName">Child&apos;s name</Label>
-                      <div className="flex gap-2">
+                      <div className="flex min-w-0 gap-2">
                         <Input
                           id="childName"
+                          name="given-name"
+                          autoComplete="given-name"
                           placeholder="e.g. Luna"
                           value={form.childName}
                           onChange={(e) =>
                             setForm((prev) => ({ ...prev, childName: e.target.value }))
                           }
                           maxLength={50}
-                          className="flex-1"
+                          className="min-w-0 flex-1"
                         />
                         <Button
                           type="button"
                           variant={isListening ? "default" : "outline"}
                           size="icon"
+                          className="shrink-0 touch-manipulation"
                           onClick={isListening ? stopVoiceInput : startVoiceInput}
                           title="Tell me about your child..."
                           aria-label="Tell me about your child"
@@ -750,8 +854,8 @@ function CreatePageContent() {
                           )}
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Click the mic to speak your child&apos;s name
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        Tap the mic to speak your child&apos;s name
                       </p>
                     </div>
 
@@ -774,13 +878,14 @@ function CreatePageContent() {
 
                     <div className="space-y-2">
                       <Label>Gender</Label>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-stretch gap-2">
                         {GENDERS.map((gender) => (
                           <Button
                             key={gender.value}
                             type="button"
                             variant={form.pronouns === gender.value ? "default" : "outline"}
                             size="sm"
+                            className="min-h-11 touch-manipulation sm:min-h-9"
                             onClick={() =>
                               setForm((prev) => ({ ...prev, pronouns: gender.value }))
                             }
@@ -790,15 +895,29 @@ function CreatePageContent() {
                         ))}
                       </div>
                     </div>
+                  </motion.div>
+                )}
 
+                {currentStep === 3 && (
+                  <motion.div
+                    key="step3"
+                    initial={{ opacity: 0, x: stepDirection === "forward" ? 50 : -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: stepDirection === "forward" ? -50 : 50 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
+                      Optional: help the illustrations match your child. Skip this step if you prefer—we&apos;ll still create a wonderful story.
+                    </p>
                     <div className="space-y-3 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 p-4">
                       <div>
-                        <Label className="text-muted-foreground">Character appearance (optional)</Label>
+                        <Label className="text-muted-foreground">Character appearance</Label>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Add details to make the character look more like your child in the illustrations
+                          Hair, skin, eyes, and small details the artist can use in every picture
                         </p>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="space-y-1">
                           <Label htmlFor="hairColor" className="text-xs">Hair color</Label>
                           <Select
@@ -880,8 +999,8 @@ function CreatePageContent() {
                           </Select>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-3">
-                        <label className="flex cursor-pointer items-center gap-2">
+                      <div className="flex flex-wrap gap-2 sm:gap-3">
+                        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-1 py-1 touch-manipulation">
                           <input
                             type="checkbox"
                             checked={form.appearance?.glasses ?? false}
@@ -894,11 +1013,11 @@ function CreatePageContent() {
                                 },
                               }))
                             }
-                            className="rounded border-muted-foreground/50"
+                            className="size-5 rounded border-muted-foreground/50"
                           />
-                          <span className="text-sm">Glasses</span>
+                          <span className="text-base sm:text-sm">Glasses</span>
                         </label>
-                        <label className="flex cursor-pointer items-center gap-2">
+                        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-1 py-1 touch-manipulation">
                           <input
                             type="checkbox"
                             checked={form.appearance?.freckles ?? false}
@@ -911,29 +1030,29 @@ function CreatePageContent() {
                                 },
                               }))
                             }
-                            className="rounded border-muted-foreground/50"
+                            className="size-5 rounded border-muted-foreground/50"
                           />
-                          <span className="text-sm">Freckles</span>
+                          <span className="text-base sm:text-sm">Freckles</span>
                         </label>
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {currentStep === 3 && (
+                {currentStep === 4 && (
                   <motion.div
-                    key="step3"
+                    key="step4"
                     initial={{ opacity: 0, x: stepDirection === "forward" ? 50 : -50 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: stepDirection === "forward" ? -50 : 50 }}
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <p className="text-center text-muted-foreground sm:mb-4">
-                      What does your child love? Pick interests and a life lesson for the story.
+                    <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
+                      What does your child love? Pick as many as you like—these shape the world of the story.
                     </p>
                     <div className="space-y-2">
-                      <Label>Interests (select as many as you like)</Label>
+                      <Label>Interests</Label>
                       <div className="flex flex-wrap gap-2">
                         {INTERESTS.map((i) => (
                           <button
@@ -941,7 +1060,7 @@ function CreatePageContent() {
                             type="button"
                             onClick={() => toggleInterest(i)}
                             className={cn(
-                              "rounded-full px-4 py-2 text-sm font-medium transition-all",
+                              "min-h-11 max-w-full touch-manipulation rounded-full px-4 py-2.5 text-left text-base font-medium transition-all active:scale-[0.98] sm:py-2 sm:text-sm",
                               form.interests.includes(i)
                                 ? "bg-primary text-primary-foreground"
                                 : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -951,14 +1070,22 @@ function CreatePageContent() {
                           </button>
                         ))}
                       </div>
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex min-w-0 gap-2 pt-2">
                         <Input
                           placeholder="Add custom interest"
                           value={customInterest}
                           onChange={(e) => setCustomInterest(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomInterest())}
+                          className="min-w-0 flex-1"
                         />
-                        <Button type="button" variant="outline" onClick={addCustomInterest} aria-label="Add custom interest">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0 touch-manipulation"
+                          onClick={addCustomInterest}
+                          aria-label="Add custom interest"
+                        >
                           <Plus className="size-4" />
                         </Button>
                       </div>
@@ -967,23 +1094,42 @@ function CreatePageContent() {
                           {form.interests.map((i) => (
                             <span
                               key={i}
-                              className="flex items-center gap-1 rounded-full bg-primary/20 px-3 py-1 text-sm"
+                              className="flex min-h-11 max-w-full items-center gap-1 rounded-full bg-primary/20 py-1 pl-3 pr-1 text-base sm:py-1 sm:text-sm"
                             >
-                              {i}
+                              <span className="min-w-0 truncate">{i}</span>
                               <button
                                 type="button"
                                 onClick={() => removeInterest(i)}
-                                className="hover:text-destructive"
+                                className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-destructive sm:size-9"
                                 aria-label={`Remove ${i}`}
                               >
-                                <X className="size-3" />
+                                <X className="size-4 sm:size-3" />
                               </button>
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
+                  </motion.div>
+                )}
 
+                {currentStep === 5 && (
+                  <motion.div
+                    key="step5"
+                    initial={{ opacity: 0, x: stepDirection === "forward" ? 50 : -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: stepDirection === "forward" ? -50 : 50 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <div className="space-y-3 text-left text-base leading-relaxed text-muted-foreground sm:mb-2 sm:text-center">
+                      <p>
+                        Choose the heart of the story: one main idea you&apos;d like your child to feel by the end.
+                      </p>
+                      <p className="text-sm leading-relaxed">
+                        The tale stays gentle and age-appropriate. We weave this theme into the adventure alongside their interests—not as a lecture, but as something they discover along the way.
+                      </p>
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="lifeLesson">Life lesson</Label>
                       <Select
@@ -1012,30 +1158,31 @@ function CreatePageContent() {
                   </motion.div>
                 )}
 
-                {currentStep === 4 && (
+                {currentStep === 6 && (
                   <motion.div
-                    key="step4"
+                    key="step6"
                     initial={{ opacity: 0, x: stepDirection === "forward" ? 50 : -50 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: stepDirection === "forward" ? -50 : 50 }}
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <p className="text-center text-muted-foreground sm:mb-4">
+                    <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
                       Choose the art style for your story&apos;s illustrations.
                     </p>
                     <div className="space-y-3">
                       <Label>Art style</Label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                         {ART_STYLE_CARDS.map((style) => (
                           <motion.div
                             key={style.id}
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
+                            className="touch-manipulation"
                           >
                             <Card
                               className={cn(
-                                "cursor-pointer transition-all",
+                                "cursor-pointer transition-all active:ring-2 active:ring-primary/40",
                                 form.artStyle === style.id
                                   ? "ring-2 ring-primary"
                                   : "hover:border-primary/50"
@@ -1044,7 +1191,7 @@ function CreatePageContent() {
                                 setForm((prev) => ({ ...prev, artStyle: style.id }))
                               }
                             >
-                              <div className="h-32 overflow-hidden rounded-t-xl sm:h-40">
+                              <div className="h-36 overflow-hidden rounded-t-xl sm:h-40">
                                 {style.image ? (
                                   <img
                                     src={style.image}
@@ -1076,16 +1223,16 @@ function CreatePageContent() {
                   </motion.div>
                 )}
 
-                {currentStep === 5 && (
+                {currentStep === 7 && (
                   <motion.div
-                    key="step5"
+                    key="step7"
                     initial={{ opacity: 0, x: stepDirection === "forward" ? 50 : -50 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: stepDirection === "forward" ? -50 : 50 }}
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <p className="text-center text-muted-foreground sm:mb-4">
+                    <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
                       Choose the AI voice for read-aloud (if your plan includes it). You&apos;re almost done!
                     </p>
 
@@ -1102,11 +1249,11 @@ function CreatePageContent() {
                         <p className="text-sm text-muted-foreground">
                           Choose the AI voice that will read your story aloud. You have a limited number of AI voice books per month.
                         </p>
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           {/* No AI voice option - saves voice slot */}
                           <Card
                             className={cn(
-                              "cursor-pointer transition-all",
+                              "min-h-[3.25rem] cursor-pointer touch-manipulation transition-all active:bg-muted/50",
                               (form.preferredVoice ?? "none") === "none"
                                 ? "ring-2 ring-primary"
                                 : "hover:border-primary/50"
@@ -1115,8 +1262,8 @@ function CreatePageContent() {
                               setForm((prev) => ({ ...prev, preferredVoice: "none" }))
                             }
                           >
-                            <CardContent className="flex items-center p-3">
-                              <span className="font-medium">
+                            <CardContent className="flex min-h-[3.25rem] items-center p-4 sm:p-3">
+                              <span className="text-base font-medium sm:text-sm">
                                 No AI voice (browser voice only)
                               </span>
                             </CardContent>
@@ -1125,7 +1272,7 @@ function CreatePageContent() {
                             <Card
                               key={voiceId}
                               className={cn(
-                                "cursor-pointer transition-all",
+                                "min-h-[3.25rem] cursor-pointer touch-manipulation transition-all active:bg-muted/50",
                                 (form.preferredVoice ?? "none") === voiceId
                                   ? "ring-2 ring-primary"
                                   : "hover:border-primary/50"
@@ -1134,15 +1281,15 @@ function CreatePageContent() {
                                 setForm((prev) => ({ ...prev, preferredVoice: voiceId }))
                               }
                             >
-                              <CardContent className="flex items-center justify-between p-3">
-                                <span className="font-medium">
+                              <CardContent className="flex min-h-[3.25rem] items-center justify-between gap-2 p-4 sm:p-3">
+                                <span className="min-w-0 flex-1 text-base font-medium sm:text-sm">
                                   {TTS_VOICE_LABELS[voiceId] ?? voiceId}
                                 </span>
                                 <Button
-                          type="button"
+                                  type="button"
                                   variant="ghost"
                                   size="icon"
-                                  className="size-8 shrink-0"
+                                  className="shrink-0 touch-manipulation"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (playingSample === voiceId) {
@@ -1194,7 +1341,7 @@ function CreatePageContent() {
                       <Button
                         type="button"
                         variant="ghost"
-                        className="w-full"
+                        className="min-h-11 w-full touch-manipulation"
                         onClick={async () => {
                           try {
                             const pronouns =
@@ -1232,14 +1379,14 @@ function CreatePageContent() {
               </AnimatePresence>
             </div>
 
-            {/* Step navigation - sticky on mobile so Next/Create is always visible */}
-            <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-4 border-t border-border bg-background/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:z-auto sm:-mx-0 sm:mt-6 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+            {/* Step navigation — outside scroll area so Back/Next stay visible */}
+            <div className="nextBackButtons mt-4 flex shrink-0 gap-3 border-t border-border bg-background/95 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => goToStep(currentStep - 1)}
                 disabled={currentStep === 1}
-                className="shrink-0"
+                className="min-h-12 flex-1 touch-manipulation sm:min-h-11 sm:flex-none sm:px-6"
               >
                 <ChevronLeft className="mr-1 size-4" />
                 Back
@@ -1252,10 +1399,11 @@ function CreatePageContent() {
                     if (canProceedFromStep(currentStep)) goToStep(currentStep + 1);
                     else if (currentStep === 1) toast.error("Please confirm you are a parent or guardian.");
                     else if (currentStep === 2) toast.error("Please enter your child's name.");
-                    else if (currentStep === 3) toast.error("Please select at least one interest and a life lesson.");
+                    else if (currentStep === 4) toast.error("Please select at least one interest.");
+                    else if (currentStep === 5) toast.error("Please choose a life lesson, or enter your custom lesson.");
                   }}
                   disabled={!canProceedFromStep(currentStep)}
-                  className="min-w-[120px]"
+                  className="min-h-12 min-w-0 flex-1 touch-manipulation sm:min-h-11 sm:min-w-[120px] sm:flex-none"
                 >
                   Next
                   <ChevronRight className="ml-1 size-4" />
@@ -1265,15 +1413,14 @@ function CreatePageContent() {
                   type="submit"
                   size="lg"
                   disabled={isLoading || !parentGuardianConfirmed}
-                  className="min-w-[140px]"
+                  className="min-h-12 min-w-0 flex-1 touch-manipulation sm:min-h-14 sm:min-w-[140px] sm:flex-none"
                 >
                   <BookOpen className="mr-2 size-5" />
                   Create My Book
                 </Button>
               )}
             </div>
-          </form>
-        </motion.div>
+        </form>
       </main>
     </div>
   );

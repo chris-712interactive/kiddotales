@@ -2,13 +2,20 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 
 function SignInContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void signIn("google", { callbackUrl });
+  }, [callbackUrl]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] p-4">
@@ -23,10 +30,10 @@ function SignInContent() {
           />
         </div>
         <h1 className="mb-2 text-center text-2xl font-bold text-foreground">
-          Sign in to KiddoTales
+          Redirecting to Google...
         </h1>
         <p className="mb-6 text-center text-sm text-muted-foreground">
-          Create personalized storybooks for your child
+          If nothing happens, tap below.
         </p>
         <Button
           className="w-full"

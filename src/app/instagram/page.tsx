@@ -90,9 +90,9 @@ export default async function InstagramLandingPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
       <LandingThemeLock />
-      <AppHeader />
+      <AppHeader className="shrink-0" />
 
-      <main className="instagramLandingPage mx-auto w-full max-w-6xl flex-1 overflow-y-auto px-4 pb-16 pt-8 md:px-8">
+      <main className="instagramLandingPage mx-auto min-h-0 w-full max-w-6xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 [-webkit-overflow-scrolling:touch] md:px-8">
         <section className="rounded-3xl border-2 border-border bg-card p-6 shadow-xl md:p-10">
           <div className="mx-auto max-w-3xl text-center">
             <div className="mb-4 flex justify-center">

@@ -422,7 +422,7 @@ export default function PricingContent() {
                       )}
                       <div className="pt-2">
                         <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                          Gift this plan
+                          Gift to someone else
                         </p>
                         <Button
                           variant="secondary"

@@ -17,13 +17,26 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const limit = Math.min(100, Math.max(10, parseInt(searchParams.get("limit") ?? "50", 10)));
+    const q = (searchParams.get("q") ?? "").trim();
     const offset = (page - 1) * limit;
 
-    const { data: users, error: usersError } = await supabase
+    let usersQuery = supabase
       .from("users")
-      .select("id, email, display_name, subscription_tier, created_at, stripe_subscription_status")
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .select(
+        "id, email, display_name, subscription_tier, created_at, stripe_subscription_status",
+        { count: "exact" }
+      )
+      .order("created_at", { ascending: false });
+
+    if (q) {
+      // Search by either email or display name.
+      usersQuery = usersQuery.or(`email.ilike.%${q}%,display_name.ilike.%${q}%`);
+    }
+
+    const { data: users, error: usersError, count: totalCount } = await usersQuery.range(
+      offset,
+      offset + limit - 1
+    );
 
     if (usersError) {
       console.error("Admin users list error:", usersError);
@@ -47,10 +60,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const { count: totalCount } = await supabase
-      .from("users")
-      .select("*", { count: "exact", head: true });
-
     const list = (users ?? []).map((u) => ({
       id: u.id,
       email: u.email ?? null,
@@ -66,6 +75,7 @@ export async function GET(request: NextRequest) {
       total: totalCount ?? 0,
       page,
       limit,
+      query: q,
     });
   } catch (e) {
     console.error("GET /api/admin/users:", e);

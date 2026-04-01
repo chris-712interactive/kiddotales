@@ -116,15 +116,16 @@ export default function BecomeAffiliatePage() {
 
   if (status === "loading" || status === "unauthenticated" || pageStatus === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
       <AppHeader
+        className="shrink-0"
         pageActions={
           <Link href="/">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3">
@@ -135,7 +136,7 @@ export default function BecomeAffiliatePage() {
         }
       />
 
-      <main className="mx-auto max-w-2xl px-4 pb-16 pt-8 md:px-8">
+      <main className="mx-auto min-h-0 w-full max-w-2xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-8 [-webkit-overflow-scrolling:touch] md:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

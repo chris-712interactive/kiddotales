@@ -244,8 +244,9 @@ export default function PricingContent() {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
       <AppHeader
+        className="shrink-0"
         pageActions={
           <Link href="/">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back">
@@ -256,7 +257,7 @@ export default function PricingContent() {
         }
       />
 
-      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8 md:px-8">
+      <main className="mx-auto min-h-0 w-full max-w-5xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 [-webkit-overflow-scrolling:touch] md:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -421,7 +422,7 @@ export default function PricingContent() {
                       )}
                       <div className="pt-2">
                         <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                          Gift this plan
+                          Gift to someone else
                         </p>
                         <Button
                           variant="secondary"

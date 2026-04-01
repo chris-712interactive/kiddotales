@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { AppHeader } from "@/components/app-header";
 import { toast } from "sonner";
 import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
@@ -57,10 +58,17 @@ export default function AdminUsersPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [queryInput, setQueryInput] = useState("");
+  const [query, setQuery] = useState("");
 
-  const loadUsers = (p = page) => {
+  const loadUsers = (p = page, q = query) => {
     setLoading(true);
-    fetch(`/api/admin/users?page=${p}&limit=${limit}`)
+    const params = new URLSearchParams({
+      page: String(p),
+      limit: String(limit),
+    });
+    if (q.trim()) params.set("q", q.trim());
+    fetch(`/api/admin/users?${params.toString()}`)
       .then((res) => {
         if (res.status === 401) {
           router.replace("/sign-in?callbackUrl=/admin/users");
@@ -83,8 +91,17 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
-    loadUsers(page);
-  }, [page]);
+    loadUsers(page, query);
+  }, [page, query]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const next = queryInput.trim();
+      setPage(1);
+      setQuery(next);
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [queryInput]);
 
   const isPaidTier = (tier: string) => tier === "spark" || tier === "magic" || tier === "legend";
 
@@ -145,7 +162,7 @@ export default function AdminUsersPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] px-4">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] px-4">
         <Shield className="size-16 text-muted-foreground" />
         <h1 className="mt-4 text-xl font-bold text-foreground">Access denied</h1>
         <p className="mt-2 text-muted-foreground">{error}</p>
@@ -157,8 +174,9 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
       <AppHeader
+        className="shrink-0"
         pageActions={
           <Link href="/admin">
             <Button variant="ghost" size="sm" className="size-9 px-2 sm:size-auto sm:px-3" aria-label="Back to admin">
@@ -169,7 +187,7 @@ export default function AdminUsersPage() {
         }
       />
 
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-4 md:px-8">
+      <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 [-webkit-overflow-scrolling:touch] md:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -189,6 +207,15 @@ export default function AdminUsersPage() {
               <CardDescription>
                 {total} total · Page {page} of {totalPages || 1}
               </CardDescription>
+              <div className="pt-2">
+                <Input
+                  value={queryInput}
+                  onChange={(e) => setQueryInput(e.target.value)}
+                  placeholder="Search by name or email..."
+                  className="max-w-md"
+                  aria-label="Search users by name or email"
+                />
+              </div>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -199,22 +226,22 @@ export default function AdminUsersPage() {
                 <p className="py-8 text-center text-muted-foreground">No users found.</p>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-xl border border-border/60">
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-border">
-                          <th className="pb-3 pr-4 font-medium">Email</th>
-                          <th className="pb-3 pr-4 font-medium">Name</th>
-                          <th className="pb-3 pr-4 font-medium">Tier</th>
-                          <th className="pb-3 pr-4 font-medium">Books</th>
-                          <th className="pb-3 pr-4 font-medium">Joined</th>
-                          <th className="pb-3 font-medium">Actions</th>
+                          <th className="pb-3 pr-4 pl-4 pt-3 font-medium">Email</th>
+                          <th className="pb-3 pr-4 pt-3 font-medium">Name</th>
+                          <th className="pb-3 pr-4 pt-3 font-medium">Tier</th>
+                          <th className="pb-3 pr-4 pt-3 font-medium">Books</th>
+                          <th className="pb-3 pr-4 pt-3 font-medium">Joined</th>
+                          <th className="pb-3 pt-3 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {users.map((u) => (
                           <tr key={u.id} className="border-b border-border/50">
-                            <td className="py-3 pr-4">
+                            <td className="py-3 pr-4 pl-4">
                               <span className="font-mono text-sm">
                                 {u.email || <span className="text-muted-foreground">—</span>}
                               </span>

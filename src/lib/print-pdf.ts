@@ -94,23 +94,28 @@ async function resampleBufferForPrintDraw(
   buf: Buffer,
   drawWidthPt: number,
   drawHeightPt: number,
-  fit: "inside" | "cover"
+  fit: "inside" | "cover",
+  output: "png" | "jpeg" = "png"
 ): Promise<Buffer> {
   const tw = pointsToPrintPixels(drawWidthPt);
   const th = pointsToPrintPixels(drawHeightPt);
-  return sharp(buf)
+  const pipeline = sharp(buf)
     .resize({
       width: tw,
       height: th,
       fit,
       ...(fit === "cover" ? { position: "centre" as const } : {}),
       kernel: sharp.kernel.lanczos3,
-    })
-    .png({ compressionLevel: 6 })
-    .toBuffer();
+    });
+  if (output === "jpeg") {
+    return pipeline.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+  }
+  return pipeline.png({ compressionLevel: 6 }).toBuffer();
 }
 
-type EmbeddedPng = Awaited<ReturnType<PDFDocument["embedPng"]>>;
+type EmbeddedImage =
+  | Awaited<ReturnType<PDFDocument["embedPng"]>>
+  | Awaited<ReturnType<PDFDocument["embedJpg"]>>;
 
 async function embedPageImageForPrint(
   pdfDoc: PDFDocument,
@@ -118,7 +123,7 @@ async function embedPageImageForPrint(
   maxWidthPt: number,
   maxHeightPt: number
 ): Promise<{
-  image: EmbeddedPng;
+  image: EmbeddedImage;
   drawWidthPt: number;
   drawHeightPt: number;
 } | null> {
@@ -131,8 +136,14 @@ async function embedPageImageForPrint(
     const s = Math.min(maxWidthPt / iw, maxHeightPt / ih);
     const drawWidthPt = iw * s;
     const drawHeightPt = ih * s;
-    const out = await resampleBufferForPrintDraw(buf, drawWidthPt, drawHeightPt, "inside");
-    const image = await pdfDoc.embedPng(out);
+    const out = await resampleBufferForPrintDraw(
+      buf,
+      drawWidthPt,
+      drawHeightPt,
+      "inside",
+      "jpeg"
+    );
+    const image = await pdfDoc.embedJpg(out);
     return { image, drawWidthPt, drawHeightPt };
   } catch {
     return null;
@@ -145,7 +156,7 @@ async function embedCoverImageForPrint(
   pageWidthPt: number,
   pageHeightPt: number
 ): Promise<{
-  image: EmbeddedPng;
+  image: EmbeddedImage;
   drawWidthPt: number;
   drawHeightPt: number;
 } | null> {
@@ -158,8 +169,14 @@ async function embedCoverImageForPrint(
     const s = Math.max(pageWidthPt / iw, pageHeightPt / ih);
     const drawWidthPt = iw * s;
     const drawHeightPt = ih * s;
-    const out = await resampleBufferForPrintDraw(buf, drawWidthPt, drawHeightPt, "cover");
-    const image = await pdfDoc.embedPng(out);
+    const out = await resampleBufferForPrintDraw(
+      buf,
+      drawWidthPt,
+      drawHeightPt,
+      "cover",
+      "jpeg"
+    );
+    const image = await pdfDoc.embedJpg(out);
     return { image, drawWidthPt, drawHeightPt };
   } catch {
     return null;
@@ -170,7 +187,7 @@ async function embedKiddoLogoForCover(
   pdfDoc: PDFDocument,
   maxWidthPt: number,
   maxHeightPt: number
-): Promise<{ image: EmbeddedPng; drawWidthPt: number; drawHeightPt: number } | null> {
+): Promise<{ image: EmbeddedImage; drawWidthPt: number; drawHeightPt: number } | null> {
   try {
     const logoPath = path.join(
       process.cwd(),
@@ -318,15 +335,15 @@ async function autoTitleLayoutFromCover(
   }
 }
 
-/** Interior page count for Lulu (dedication + story pages; cover is separate file). */
+/** Interior page count for Lulu (cover is separate): dedication/blank + (image,text) per story page. */
 export function getLuluInteriorPageCount(book: BookData): number {
-  const dedicationPages =
-    book.dedication?.message || book.dedication?.from ? 1 : 0;
-  return dedicationPages + book.pages.length;
+  return 1 + book.pages.length * 2;
 }
 
 /**
- * Single-page-per-spread interior PDF for Lulu (portrait trim from style or US Letter).
+ * Interior PDF for Lulu:
+ * - First interior page is always reserved for dedication (or blank if none)
+ * - Then each story spread is two pages: illustration page, then large text page
  */
 export async function buildLuluInteriorPdf(
   book: BookData,
@@ -337,9 +354,9 @@ export async function buildLuluInteriorPdf(
   const pdfDoc = await PDFDocument.create();
   const contentW = w - MARGIN * 2;
 
+  const dedicationPage = pdfDoc.addPage([w, h]);
   const hasDedication = Boolean(book.dedication?.message || book.dedication?.from);
   if (hasDedication && book.dedication) {
-    const page = pdfDoc.addPage([w, h]);
     const fs = 20;
     const maxChars = Math.max(18, Math.floor(contentW / (fs * 0.52)));
     const lines = wrapTextApprox(book.dedication.message, maxChars);
@@ -357,7 +374,7 @@ export async function buildLuluInteriorPdf(
       italic: false,
     });
     const textImage = await pdfDoc.embedPng(textPng);
-    page.drawImage(textImage, {
+    dedicationPage.drawImage(textImage, {
       x: MARGIN,
       y: (h - textH) / 2,
       width: textW,
@@ -365,14 +382,12 @@ export async function buildLuluInteriorPdf(
     });
   }
 
-  const imageRegionHeight = h * 0.58;
-  const textMinY = MARGIN + 80;
-  const fontSize = 20;
+  const textFontSize = 30;
 
   for (const p of book.pages) {
-    const page = pdfDoc.addPage([w, h]);
+    const imagePage = pdfDoc.addPage([w, h]);
     const maxW = contentW;
-    const maxH = imageRegionHeight - MARGIN;
+    const maxH = h - MARGIN * 2;
     const embedded = await embedPageImageForPrint(
       pdfDoc,
       { imageData: p.imageData, imageUrl: p.imageUrl },
@@ -382,30 +397,28 @@ export async function buildLuluInteriorPdf(
     if (embedded) {
       const { image, drawWidthPt: dw, drawHeightPt: dh } = embedded;
       const ix = MARGIN + (contentW - dw) / 2;
-      const iy = h - MARGIN - dh;
-      page.drawImage(image, { x: ix, y: iy, width: dw, height: dh });
+      const iy = MARGIN + (h - MARGIN * 2 - dh) / 2;
+      imagePage.drawImage(image, { x: ix, y: iy, width: dw, height: dh });
     }
 
-    const maxChars = Math.max(16, Math.floor(contentW / (fontSize * 0.55)));
+    const textPage = pdfDoc.addPage([w, h]);
+    const maxChars = Math.max(14, Math.floor(contentW / (textFontSize * 0.55)));
     const lines = wrapTextApprox(p.text, maxChars);
-    const lh = Math.round(fontSize * LINE_HEIGHT_MULT);
-    const textH = Math.max(80, lines.length * lh + 18);
+    const lh = Math.round(textFontSize * LINE_HEIGHT_MULT);
+    const textH = Math.max(120, lines.length * lh + 24);
     const textW = Math.max(120, Math.floor(contentW));
     const textPng = await renderTextBlockPng({
       widthPt: textW,
       heightPt: textH,
       lines,
-      fontSizePt: fontSize,
+      fontSizePt: textFontSize,
       lineHeightPt: lh,
       italic: false,
     });
     const textImage = await pdfDoc.embedPng(textPng);
-    const maxTop = imageRegionHeight - MARGIN;
-    const minTop = textMinY;
-    const yTop = Math.max(minTop, maxTop - textH + 30);
-    page.drawImage(textImage, {
+    textPage.drawImage(textImage, {
       x: MARGIN,
-      y: yTop,
+      y: (h - textH) / 2,
       width: textW,
       height: textH,
     });

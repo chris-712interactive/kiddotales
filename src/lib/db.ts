@@ -8,7 +8,7 @@ import {
 import type { BookData, CreationMetadata, ChildProfile } from "@/types";
 
 /** @deprecated Use getBookLimitForUser with tier instead */
-const BOOK_LIMIT = parseInt(process.env.BOOK_LIMIT_PER_USER || "3", 10);
+const BOOK_LIMIT = getBookLimitForTier("free").limit;
 
 export type UserProfile = {
   id: string;

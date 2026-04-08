@@ -341,7 +341,7 @@ export default function LandingPage() {
           if (res) {
             setDashboardData({
               bookCount: res.bookCount ?? 0,
-              bookLimit: res.bookLimit ?? 3,
+              bookLimit: res.bookLimit ?? SUBSCRIPTION_TIERS.free.bookLimit,
               bookLimitPeriod: res.bookLimitPeriod ?? "total",
               voiceCount: res.voiceCount ?? 0,
               voiceLimit: res.voiceLimit ?? 0,
@@ -368,7 +368,7 @@ export default function LandingPage() {
     dashboardData ?? (isAuthenticated
       ? {
           bookCount: 0,
-          bookLimit: 3,
+          bookLimit: SUBSCRIPTION_TIERS.free.bookLimit,
           bookLimitPeriod: "total" as const,
           voiceCount: 0,
           voiceLimit: 0,

@@ -2,6 +2,50 @@ import Stripe from "stripe";
 
 export type BookLimitPeriod = "total" | "monthly";
 
+/** Non-negative int from env, or fallback. */
+function parseNonNegativeIntEnv(value: string | undefined, fallback: number): number {
+  if (value == null || value === "") return fallback;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/**
+ * Monthly book cap for paid tiers. Uses explicit env keys so Next.js can inline
+ * NEXT_PUBLIC_* in client bundles. Prefer MONTHLY_BOOK_LIMIT_* on the server;
+ * set NEXT_PUBLIC_MONTHLY_BOOK_LIMIT_* to the same values for pricing/landing UI in the browser.
+ */
+function monthlyBookLimitForTier(
+  tier: "spark" | "magic" | "legend",
+  fallback: number
+): number {
+  let pub: string | undefined;
+  let server: string | undefined;
+  if (tier === "spark") {
+    pub = process.env.NEXT_PUBLIC_MONTHLY_BOOK_LIMIT_SPARK;
+    server = process.env.MONTHLY_BOOK_LIMIT_SPARK;
+  } else if (tier === "magic") {
+    pub = process.env.NEXT_PUBLIC_MONTHLY_BOOK_LIMIT_MAGIC;
+    server = process.env.MONTHLY_BOOK_LIMIT_MAGIC;
+  } else {
+    pub = process.env.NEXT_PUBLIC_MONTHLY_BOOK_LIMIT_LEGEND;
+    server = process.env.MONTHLY_BOOK_LIMIT_LEGEND;
+  }
+  return parseNonNegativeIntEnv(pub, parseNonNegativeIntEnv(server, fallback));
+}
+
+const MONTHLY_BOOK_LIMIT_SPARK = monthlyBookLimitForTier("spark", 12);
+const MONTHLY_BOOK_LIMIT_MAGIC = monthlyBookLimitForTier("magic", 35);
+const MONTHLY_BOOK_LIMIT_LEGEND = monthlyBookLimitForTier("legend", 75);
+
+function freeBookLimitFromEnv(): number {
+  return parseNonNegativeIntEnv(
+    process.env.NEXT_PUBLIC_BOOK_LIMIT_PER_USER ?? process.env.BOOK_LIMIT_PER_USER,
+    3
+  );
+}
+
+const FREE_BOOK_LIMIT = freeBookLimitFromEnv();
+
 /** Whether to use live Stripe keys/prices (production only). Use sandbox otherwise. */
 export function isStripeLiveMode(): boolean {
   // Vercel: production deployment uses live; preview/development use sandbox
@@ -92,13 +136,13 @@ export const SUBSCRIPTION_TIERS = {
   free: {
     id: "free",
     name: "Free",
-    bookLimit: 3,
+    bookLimit: FREE_BOOK_LIMIT,
     bookLimitPeriod: "total" as BookLimitPeriod,
     voiceLimit: 0,
     priceMonthly: null,
     priceYearly: null,
     features: [
-      "Up to 3 books total",
+      `Up to ${FREE_BOOK_LIMIT} books total`,
       "Basic generation",
       "Limited art styles",
     ],
@@ -106,13 +150,13 @@ export const SUBSCRIPTION_TIERS = {
   spark: {
     id: "spark",
     name: "Spark",
-    bookLimit: 12,
+    bookLimit: MONTHLY_BOOK_LIMIT_SPARK,
     bookLimitPeriod: "monthly" as BookLimitPeriod,
     voiceLimit: 5,
-    priceMonthly: 5.99,
-    priceYearly: 59,
+    priceMonthly: 6.99,
+    priceYearly: 69,
     features: [
-      "Up to 12 books/month",
+      `Up to ${MONTHLY_BOOK_LIMIT_SPARK} books/month`,
       "No watermark",
       "Full art styles",
       "Save last 10 books",
@@ -126,13 +170,13 @@ export const SUBSCRIPTION_TIERS = {
   magic: {
     id: "magic",
     name: "Magic",
-    bookLimit: 35,
+    bookLimit: MONTHLY_BOOK_LIMIT_MAGIC,
     bookLimitPeriod: "monthly" as BookLimitPeriod,
     voiceLimit: 10,
-    priceMonthly: 9.99,
-    priceYearly: 99,
+    priceMonthly: 11.99,
+    priceYearly: 119,
     features: [
-      "Up to 35 books/month",
+      `Up to ${MONTHLY_BOOK_LIMIT_MAGIC} books/month`,
       "Everything in Spark",
       "Priority generation",
       "Voice input",
@@ -147,13 +191,13 @@ export const SUBSCRIPTION_TIERS = {
   legend: {
     id: "legend",
     name: "Legend",
-    bookLimit: 75,
+    bookLimit: MONTHLY_BOOK_LIMIT_LEGEND,
     bookLimitPeriod: "monthly" as BookLimitPeriod,
     voiceLimit: 15,
     priceMonthly: 16.99,
     priceYearly: 169,
     features: [
-      "Up to 75 books/month",
+      `Up to ${MONTHLY_BOOK_LIMIT_LEGEND} books/month`,
       "Everything in Magic",
       "Multi-child profiles (up to 5 kids)",
       "Family sharing (invite 2 others)",

@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Volume2,
   Download,
+  Package,
   Plus,
   RectangleVertical,
   RectangleHorizontal,
@@ -37,6 +38,7 @@ function BookViewerContent() {
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
+  const [printOrderingEnabled, setPrintOrderingEnabled] = useState(false);
   const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
   const { data: session } = useSession();
 
@@ -50,6 +52,13 @@ function BookViewerContent() {
       setSubscriptionTier(null);
     }
   }, [session?.user]);
+
+  useEffect(() => {
+    fetch("/api/print/config")
+      .then((r) => r.json())
+      .then((d) => setPrintOrderingEnabled(Boolean(d.enabled)))
+      .catch(() => setPrintOrderingEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (!deferredCorrectFromUrl || !book?.id || !session?.user) return;
@@ -438,6 +447,19 @@ function BookViewerContent() {
                   <span className="hidden sm:inline">Correct</span>
                 </Button>
               )
+            )}
+            {session?.user && book.id && printOrderingEnabled && (
+              <Link href={`/print/order?bookId=${encodeURIComponent(book.id)}`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="size-9 px-2 sm:size-auto sm:px-3"
+                  aria-label="Order printed copy"
+                >
+                  <Package className="size-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Print</span>
+                </Button>
+              </Link>
             )}
             <Button
               variant="outline"

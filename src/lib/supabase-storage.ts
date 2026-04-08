@@ -66,6 +66,29 @@ export async function uploadAudioToStorage(
   }
 }
 
+/** Upload PDF bytes to book-images bucket (public URL for Lulu source_url). */
+export async function uploadPrintPdfBuffer(
+  buffer: Buffer,
+  path: string
+): Promise<string | null> {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { error } = await supabase.storage.from(BUCKET).upload(path, buffer, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+    if (error) {
+      console.error("[KiddoTales] print PDF upload error:", error);
+      return null;
+    }
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error("[KiddoTales] uploadPrintPdfBuffer error:", err);
+    return null;
+  }
+}
+
 /** Delete all storage files for a book. */
 export async function deleteBookStorage(bookId: string): Promise<void> {
   const paths = getBookStoragePaths(bookId);

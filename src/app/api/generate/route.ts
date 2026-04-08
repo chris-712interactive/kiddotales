@@ -37,6 +37,40 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
+/** Cover + interior illustrations (BFL FLUX.2 Pro on Replicate). */
+const REPLICATE_FLUX_IMAGE_MODEL =
+  "black-forest-labs/flux-2-pro" as `${string}/${string}`;
+
+/**
+ * FLUX.2 Pro `resolution` (megapixels as a string, e.g. "4 MP"). Max 4 MP on Replicate.
+ * Optional env REPLICATE_FLUX_RESOLUTION — e.g. "2 MP" for lower cost (at 4:5, output may cap below requested MP).
+ */
+const REPLICATE_FLUX_IMAGE_RESOLUTION =
+  process.env.REPLICATE_FLUX_RESOLUTION?.trim() || "4 MP";
+
+/**
+ * FLUX.2 Pro safety_tolerance: 1 = strictest, 5 = most permissive.
+ * Legitimate children's book prompts are often false-flagged at 1–2; default 4 reduces E005 noise.
+ * Override with REPLICATE_FLUX_SAFETY_TOLERANCE (integer 1–5).
+ */
+function replicateFluxSafetyTolerance(): number {
+  const raw = process.env.REPLICATE_FLUX_SAFETY_TOLERANCE?.trim();
+  if (!raw) return 4;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return 4;
+  return Math.min(5, Math.max(1, n));
+}
+
+function replicateFluxProImageInput(prompt: string) {
+  return {
+    prompt,
+    output_format: "png" as const,
+    aspect_ratio: "4:5" as const,
+    resolution: REPLICATE_FLUX_IMAGE_RESOLUTION,
+    safety_tolerance: replicateFluxSafetyTolerance(),
+  };
+}
+
 /** Builds character description from optional parent-selected appearance. */
 function buildAppearancePrefix(
   childName: string,
@@ -366,8 +400,10 @@ export async function POST(request: NextRequest) {
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
+    // Positive-only phrasing: FLUX safety filters often false-flag prompts that mention
+    // nudity/underwear/bathing even as negations (E005).
     const imageSafetySuffix =
-      " G-rated wholesome children's picture book: every person fully and modestly clothed, no nudity or partial nudity, no underwear visible, no bathing or changing clothes, no romantic or sensual poses, family-safe imagery only.";
+      " Wholesome children's picture book illustration, G-rated family audience. Characters in normal modest everyday outfits; cheerful innocent scenes and poses suited to ages 3–8; bright friendly classic storybook mood.";
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
@@ -377,10 +413,9 @@ export async function POST(request: NextRequest) {
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
-        const output = await replicate.run(
-          "black-forest-labs/flux-2-dev" as `${string}/${string}`,
-          { input: { prompt: fullCoverPrompt, output_format: "png", aspect_ratio: "4:5" } }
-        );
+        const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
+          input: replicateFluxProImageInput(fullCoverPrompt),
+        });
         const result = Array.isArray(output) ? output[0] : output;
         if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
           coverImageUrl = (result as { url: () => string }).url();
@@ -416,10 +451,9 @@ export async function POST(request: NextRequest) {
       const fullPrompt = `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
-          const output = await replicate.run(
-            "black-forest-labs/flux-2-dev" as `${string}/${string}`,
-            { input: { prompt: fullPrompt, output_format: "png", aspect_ratio: "4:5" } }
-          );
+          const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
+            input: replicateFluxProImageInput(fullPrompt),
+          });
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
             imageUrls.push((result as { url: () => string }).url());

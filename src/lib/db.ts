@@ -252,8 +252,10 @@ export async function getPurchasedGiftMembershipById(
 /** Ensure user exists in users table. */
 export async function ensureUser(userId: string, email?: string | null): Promise<void> {
   const supabase = createSupabaseAdmin();
+  // Do not set created_at here: upsert runs on every sign-in and would overwrite the
+  // true join date. New rows get created_at from DB default (see 001_initial_schema.sql).
   await supabase.from("users").upsert(
-    { id: userId, email: email || null, created_at: new Date().toISOString() },
+    { id: userId, email: email || null },
     { onConflict: "id" }
   );
 }

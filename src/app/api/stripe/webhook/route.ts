@@ -15,6 +15,12 @@ import {
   setUserReferredBy,
   hasCommissionForSubscription,
 } from "@/lib/affiliates";
+import {
+  getPrintOrderById,
+  getPrintOrderByStripeSession,
+  updatePrintOrder,
+} from "@/lib/print-db";
+import { fulfillPrintOrderToLulu } from "@/lib/print-fulfillment";
 
 /** Stripe webhook handler. Must use raw body for signature verification. */
 export async function POST(req: NextRequest) {
@@ -82,6 +88,59 @@ export async function POST(req: NextRequest) {
               giftCode: gift.code,
               tier: gift.tier,
               durationMonths: gift.durationMonths,
+            });
+          }
+          break;
+        }
+
+        // Lulu print-on-demand (one-time payment)
+        if (session.mode === "payment" && session.metadata?.kind === "lulu_print") {
+          const printOrderId = session.metadata.printOrderId;
+          const userId = session.metadata.userId;
+          if (!printOrderId || !userId) {
+            console.warn("[Stripe webhook] lulu_print: missing printOrderId or userId");
+            break;
+          }
+
+          const order = await getPrintOrderByStripeSession(session.id);
+          if (!order || order.userId !== userId) {
+            console.warn("[Stripe webhook] lulu_print: order mismatch or not found");
+            break;
+          }
+
+          if (order.status !== "awaiting_payment") {
+            break;
+          }
+
+          if (session.payment_status !== "paid") {
+            break;
+          }
+
+          const paidCents = session.amount_total ?? 0;
+          if (paidCents !== order.retailAmountCents) {
+            console.error(
+              "[Stripe webhook] lulu_print: amount mismatch",
+              paidCents,
+              order.retailAmountCents
+            );
+            break;
+          }
+
+          const paymentIntentId =
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id ?? null;
+
+          await updatePrintOrder(printOrderId, {
+            status: "paid",
+            stripePaymentIntentId: paymentIntentId,
+            errorMessage: null,
+          });
+
+          const paidOrder = await getPrintOrderById(printOrderId, userId);
+          if (paidOrder) {
+            void fulfillPrintOrderToLulu(paidOrder).catch((err) => {
+              console.error("[Stripe webhook] lulu_print fulfillment:", err);
             });
           }
           break;

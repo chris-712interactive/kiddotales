@@ -7,6 +7,7 @@ import {
   getUserBookCountByPeriod,
   getUserVoiceCountByPeriod,
   getBookLimitForUser,
+  getChildProfiles,
 } from "@/lib/db";
 import { getStripe, getVoiceLimitForTier, getVoicesForTier } from "@/lib/stripe";
 import { getTierCapabilities } from "@/lib/entitlements";
@@ -34,10 +35,11 @@ export async function GET() {
       );
     }
 
-    const [bookCount, voiceCount, affiliate] = await Promise.all([
+    const [bookCount, voiceCount, affiliate, childProfiles] = await Promise.all([
       getUserBookCountByPeriod(userId, limitConfig.period),
       getUserVoiceCountByPeriod(userId, limitConfig.period),
       getAffiliateByUserId(userId),
+      getChildProfiles(userId),
     ]);
 
     const voiceLimit = getVoiceLimitForTier(profile.subscriptionTier);
@@ -83,6 +85,9 @@ export async function GET() {
       voiceOptions,
       allowedArtStyles,
       correctionMode: tierCapabilities.correctionMode,
+      pdfLevel: tierCapabilities.pdfLevel,
+      maxChildProfiles: tierCapabilities.maxChildProfiles,
+      childProfileCount: childProfiles.length,
       subscriptionTier: profile.subscriptionTier,
       theme: profile.theme,
       nextBillingDate,

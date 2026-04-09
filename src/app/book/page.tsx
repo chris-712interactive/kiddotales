@@ -37,9 +37,11 @@ function BookViewerContent() {
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
+  const [pdfVariant, setPdfVariant] = useState<"basic-standard" | "premium-storybook" | "premium-photo">("basic-standard");
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
   const [correctionMode, setCorrectionMode] = useState<CorrectionMode>("none");
+  const [pdfLevel, setPdfLevel] = useState<"basic" | "premium">("basic");
   const [printOrderingEnabled, setPrintOrderingEnabled] = useState(false);
   const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
   const { data: session } = useSession();
@@ -52,14 +54,17 @@ function BookViewerContent() {
           if (!res) return;
           setSubscriptionTier(res.subscriptionTier ?? "free");
           setCorrectionMode((res.correctionMode as CorrectionMode) ?? "none");
+          setPdfLevel((res.pdfLevel as "basic" | "premium") ?? "basic");
         })
         .catch(() => {
           setSubscriptionTier("free");
           setCorrectionMode("none");
+          setPdfLevel("basic");
         });
     } else {
       setSubscriptionTier(null);
       setCorrectionMode("none");
+      setPdfLevel("basic");
     }
   }, [session?.user]);
 
@@ -371,7 +376,10 @@ function BookViewerContent() {
   }, [isPlayingAll]);
 
   const handleDownloadPDF = useCallback(
-    async (orientation: "portrait" | "landscape") => {
+    async (
+      orientation: "portrait" | "landscape",
+      variant: "basic-standard" | "premium-storybook" | "premium-photo"
+    ) => {
       if (!book) return;
       setShowOrientationDialog(false);
       setIsDownloading(true);
@@ -379,9 +387,14 @@ function BookViewerContent() {
         const res = await fetch("/api/generate-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ book, orientation }),
+          body: JSON.stringify({ book, orientation, pdfVariant: variant }),
         });
-        if (!res.ok) throw new Error("Failed to generate PDF");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            data?.error || "Failed to generate PDF"
+          );
+        }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -391,7 +404,7 @@ function BookViewerContent() {
         URL.revokeObjectURL(url);
         toast.success("PDF downloaded!");
       } catch (err) {
-        toast.error("Failed to generate PDF.");
+        toast.error(err instanceof Error ? err.message : "Failed to generate PDF.");
       } finally {
         setIsDownloading(false);
       }
@@ -639,13 +652,46 @@ function BookViewerContent() {
                 aria-labelledby="orientation-dialog-title"
               >
                 <h3 id="orientation-dialog-title" className="mb-4 text-center text-lg font-semibold text-foreground">
-                  Choose PDF orientation
+                  Choose PDF layout and orientation
                 </h3>
+                <div className="mb-4 space-y-2">
+                  <button
+                    type="button"
+                    className={`w-full rounded-xl border p-3 text-left ${pdfVariant === "basic-standard" ? "border-primary bg-primary/10" : "border-border"}`}
+                    onClick={() => setPdfVariant("basic-standard")}
+                  >
+                    <p className="font-medium text-foreground">Basic PDF</p>
+                    <p className="text-xs text-muted-foreground">Standard cover + story layout</p>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pdfLevel !== "premium"}
+                    className={`w-full rounded-xl border p-3 text-left ${pdfVariant === "premium-storybook" ? "border-primary bg-primary/10" : "border-border"} ${pdfLevel !== "premium" ? "cursor-not-allowed opacity-60" : ""}`}
+                    onClick={() => pdfLevel === "premium" && setPdfVariant("premium-storybook")}
+                  >
+                    <p className="font-medium text-foreground">Premium Storybook</p>
+                    <p className="text-xs text-muted-foreground">Enhanced title styling and readability</p>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pdfLevel !== "premium"}
+                    className={`w-full rounded-xl border p-3 text-left ${pdfVariant === "premium-photo" ? "border-primary bg-primary/10" : "border-border"} ${pdfLevel !== "premium" ? "cursor-not-allowed opacity-60" : ""}`}
+                    onClick={() => pdfLevel === "premium" && setPdfVariant("premium-photo")}
+                  >
+                    <p className="font-medium text-foreground">Premium Photo</p>
+                    <p className="text-xs text-muted-foreground">Cleaner overlay, image-forward style</p>
+                  </button>
+                  {pdfLevel !== "premium" && (
+                    <p className="text-xs text-muted-foreground">
+                      Upgrade to Magic or Legend to unlock premium PDF layouts.
+                    </p>
+                  )}
+                </div>
                 <div className="flex gap-4">
                   <Button
                     variant="outline"
                     className="flex flex-1 flex-col gap-2 py-6"
-                    onClick={() => handleDownloadPDF("portrait")}
+                    onClick={() => handleDownloadPDF("portrait", pdfVariant)}
                   >
                     <RectangleVertical className="size-10 text-primary" />
                     <span>Portrait</span>
@@ -653,7 +699,7 @@ function BookViewerContent() {
                   <Button
                     variant="outline"
                     className="flex flex-1 flex-col gap-2 py-6"
-                    onClick={() => handleDownloadPDF("landscape")}
+                    onClick={() => handleDownloadPDF("landscape", pdfVariant)}
                   >
                     <RectangleHorizontal className="size-10 text-primary" />
                     <span>Landscape</span>

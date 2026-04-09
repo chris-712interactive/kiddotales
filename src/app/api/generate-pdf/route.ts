@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import sharp from "sharp";
 import type { BookData } from "@/types";
+import { auth } from "@/auth";
+import { getUserProfile } from "@/lib/db";
+import { getTierCapabilities } from "@/lib/entitlements";
 
 const A4_PORTRAIT = { width: 595, height: 842 };
 const A4_LANDSCAPE = { width: 842, height: 595 };
@@ -17,6 +20,7 @@ const PAGE_NUM_SIZE = 10;
 
 const TEXT_COLOR = rgb(0.18, 0.2, 0.26);
 const PAGE_NUM_COLOR = rgb(0.55, 0.58, 0.65);
+type PdfVariant = "basic-standard" | "premium-storybook" | "premium-photo";
 
 /**
  * Word-wrap text to fit within maxWidth.
@@ -100,14 +104,31 @@ async function embedImage(
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    const profile = session?.user?.id ? await getUserProfile(session.user.id) : null;
+    const pdfLevel = getTierCapabilities(profile?.subscriptionTier ?? "free").pdfLevel;
+
     const body = (await request.json()) as
-      | { book: BookData; orientation?: "portrait" | "landscape" }
+      | { book: BookData; orientation?: "portrait" | "landscape"; pdfVariant?: PdfVariant }
       | BookData;
     const book = "book" in body ? body.book : body;
     const orientation =
       "orientation" in body && body.orientation
         ? body.orientation
         : "portrait";
+    const requestedVariant: PdfVariant =
+      "book" in body && body.pdfVariant
+        ? body.pdfVariant
+        : "basic-standard";
+    const isPremiumVariant =
+      requestedVariant === "premium-storybook" ||
+      requestedVariant === "premium-photo";
+    if (isPremiumVariant && pdfLevel !== "premium") {
+      return NextResponse.json(
+        { error: "Upgrade to Magic or Legend for premium PDF layouts." },
+        { status: 403 }
+      );
+    }
 
     if (!book?.pages) {
       return NextResponse.json({ error: "Invalid book data" }, { status: 400 });
@@ -132,7 +153,12 @@ export async function POST(request: NextRequest) {
       imageData: book.coverImageData,
       imageUrl: book.coverImageUrl,
     };
-    const baseTitleSize = 32;
+    const baseTitleSize =
+      requestedVariant === "premium-storybook"
+        ? 36
+        : requestedVariant === "premium-photo"
+          ? 30
+          : 32;
     const subtitleSize = 14;
     const maxTitleWidth = pageSize.width - 80;
     let titleSize = baseTitleSize;
@@ -141,7 +167,11 @@ export async function POST(request: NextRequest) {
       titleSize = Math.max(14, Math.floor(baseTitleSize * (maxTitleWidth / titleWidth)));
       titleWidth = fontBold.widthOfTextAtSize(book.title, titleSize);
     }
-    const subtitleWidth = font.widthOfTextAtSize("A KiddoTales Story", subtitleSize);
+    const subtitleText =
+      requestedVariant === "premium-storybook"
+        ? "A Premium KiddoTales Story"
+        : "A KiddoTales Story";
+    const subtitleWidth = font.widthOfTextAtSize(subtitleText, subtitleSize);
     const textBlockWidth = Math.max(titleWidth, subtitleWidth) + 48;
     const textBlockHeight = titleSize + 12 + 2 + 12 + subtitleSize; // title + gap + line + gap + subtitle
     const boxPadding = 20;
@@ -174,7 +204,7 @@ export async function POST(request: NextRequest) {
         width: boxWidth,
         height: boxHeight,
         color: rgb(1, 1, 1),
-        opacity: 0.88,
+        opacity: requestedVariant === "premium-photo" ? 0.78 : 0.88,
       });
 
       const textTop = boxY + boxHeight - boxPadding;
@@ -193,13 +223,16 @@ export async function POST(request: NextRequest) {
         height: 2,
         color: rgb(0.85, 0.87, 0.92),
       });
-      coverPage.drawText("A KiddoTales Story", {
-        x: coverCenterX - subtitleWidth / 2,
-        y: textTop - titleSize - 12 - 2 - 12 - subtitleSize,
-        size: subtitleSize,
-        font,
-        color: rgb(0.45, 0.48, 0.55),
-      });
+      coverPage.drawText(
+        subtitleText,
+        {
+          x: coverCenterX - subtitleWidth / 2,
+          y: textTop - titleSize - 12 - 2 - 12 - subtitleSize,
+          size: subtitleSize,
+          font,
+          color: rgb(0.45, 0.48, 0.55),
+        }
+      );
     } else {
       coverPage.drawText(book.title, {
         x: coverCenterX - titleWidth / 2,
@@ -215,13 +248,16 @@ export async function POST(request: NextRequest) {
         height: 2,
         color: rgb(0.85, 0.87, 0.92),
       });
-      coverPage.drawText("A KiddoTales Story", {
-        x: coverCenterX - subtitleWidth / 2,
-        y: coverCenterY - 35,
-        size: subtitleSize,
-        font,
-        color: rgb(0.45, 0.48, 0.55),
-      });
+      coverPage.drawText(
+        subtitleText,
+        {
+          x: coverCenterX - subtitleWidth / 2,
+          y: coverCenterY - 35,
+          size: subtitleSize,
+          font,
+          color: rgb(0.45, 0.48, 0.55),
+        }
+      );
     }
 
     // ---- Dedication page (optional): after cover, before first story page ----
@@ -311,7 +347,13 @@ export async function POST(request: NextRequest) {
         TEXT_FONT_SIZE,
         textContentWidth
       );
-      const lineHeightPt = TEXT_FONT_SIZE * LINE_HEIGHT;
+      const textSize =
+        requestedVariant === "premium-storybook"
+          ? TEXT_FONT_SIZE + 1
+          : requestedVariant === "premium-photo"
+            ? TEXT_FONT_SIZE - 1
+            : TEXT_FONT_SIZE;
+      const lineHeightPt = textSize * LINE_HEIGHT;
       const textBlockHeight = lines.length * lineHeightPt;
       const textStartY = (pageSize.height + textBlockHeight) / 2; // Center text block vertically
 
@@ -321,7 +363,7 @@ export async function POST(request: NextRequest) {
         textPage.drawText(line, {
           x: INNER_MARGIN + TEXT_PAGE_PADDING + (textContentWidth - lineWidth) / 2,
           y: textStartY - (j + 1) * lineHeightPt,
-          size: TEXT_FONT_SIZE,
+          size: textSize,
           font,
           color: TEXT_COLOR,
         });

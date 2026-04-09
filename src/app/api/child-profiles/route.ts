@@ -3,7 +3,9 @@ import { auth } from "@/auth";
 import {
   getChildProfiles,
   createChildProfile,
+  getUserProfile,
 } from "@/lib/db";
+import { getTierCapabilities } from "@/lib/entitlements";
 import type { ChildProfile } from "@/types";
 
 export async function GET() {
@@ -12,8 +14,19 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const profiles = await getChildProfiles(session.user.id);
-  return NextResponse.json(profiles);
+  const userId = session.user.id;
+  const [profiles, profile] = await Promise.all([
+    getChildProfiles(userId),
+    getUserProfile(userId),
+  ]);
+  const tier = profile?.subscriptionTier ?? "free";
+  const maxChildProfiles = getTierCapabilities(tier).maxChildProfiles;
+
+  return NextResponse.json({
+    profiles,
+    maxChildProfiles,
+    childProfileCount: profiles.length,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -33,7 +46,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const profile = await createChildProfile(session.user.id, {
+  const userId = session.user.id;
+  const [existing, userProfile] = await Promise.all([
+    getChildProfiles(userId),
+    getUserProfile(userId),
+  ]);
+  const maxChildProfiles = getTierCapabilities(
+    userProfile?.subscriptionTier ?? "free"
+  ).maxChildProfiles;
+  if (existing.length >= maxChildProfiles) {
+    return NextResponse.json(
+      {
+        error: `You've reached your plan limit of ${maxChildProfiles} child profile${maxChildProfiles === 1 ? "" : "s"}. Upgrade to add more.`,
+      },
+      { status: 403 }
+    );
+  }
+
+  const profile = await createChildProfile(userId, {
     name: name.trim(),
     age: age ?? 5,
     pronouns: pronouns ?? "they/them",

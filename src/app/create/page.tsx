@@ -209,6 +209,7 @@ function CreatePageContent() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const [profiles, setProfiles] = useState<ChildProfile[]>([]);
+  const [maxChildProfiles, setMaxChildProfiles] = useState<number | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
   const [parentGuardianConfirmed, setParentGuardianConfirmed] = useState(false);
@@ -380,7 +381,26 @@ function CreatePageContent() {
     if (status !== "authenticated") return;
     fetch("/api/child-profiles")
       .then((r) => r.json())
-      .then((data) => setProfiles(Array.isArray(data) ? data : []))
+      .then((data: unknown) => {
+        if (
+          data &&
+          typeof data === "object" &&
+          Array.isArray((data as { profiles?: unknown }).profiles)
+        ) {
+          const d = data as {
+            profiles: ChildProfile[];
+            maxChildProfiles?: number;
+          };
+          setProfiles(d.profiles);
+          if (typeof d.maxChildProfiles === "number") {
+            setMaxChildProfiles(d.maxChildProfiles);
+          }
+        } else if (Array.isArray(data)) {
+          setProfiles(data);
+        } else {
+          setProfiles([]);
+        }
+      })
       .catch(() => setProfiles([]));
   }, [status]);
 
@@ -1394,41 +1414,78 @@ function CreatePageContent() {
 
                     {/* Save as profile */}
                     {form.childName.trim() && form.interests.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="min-h-11 w-full touch-manipulation"
-                        onClick={async () => {
-                          try {
-                            const pronouns =
-                              form.pronouns === "custom" ? customPronoun : form.pronouns;
-                            const lifeLesson =
-                              form.lifeLesson === "custom"
-                                ? customLifeLesson
-                                : form.lifeLesson;
-                            const res = await fetch("/api/child-profiles", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                name: form.childName.trim(),
-                                age: form.age,
-                                pronouns: pronouns || "they/them",
-                                interests: form.interests,
-                                appearance: form.appearance ?? {},
-                              }),
-                            });
-                            if (!res.ok) throw new Error("Failed to save");
-                            const profile = await res.json();
-                            setProfiles((prev) => [profile, ...prev]);
-                            setSelectedProfileId(profile.id);
-                            toast.success(`Saved "${profile.name}" as a profile.`);
-                          } catch {
-                            toast.error("Could not save profile.");
+                      <div className="space-y-2">
+                        {maxChildProfiles != null &&
+                          profiles.length >= maxChildProfiles && (
+                            <p className="text-center text-sm text-muted-foreground">
+                              You&apos;re using all {maxChildProfiles} profile
+                              slot{maxChildProfiles === 1 ? "" : "s"} on your plan.{" "}
+                              <Link
+                                href="/pricing"
+                                className="font-medium text-primary underline hover:no-underline"
+                              >
+                                Upgrade
+                              </Link>{" "}
+                              to save more, or manage profiles in{" "}
+                              <Link
+                                href="/settings/profiles"
+                                className="font-medium text-primary underline hover:no-underline"
+                              >
+                                settings
+                              </Link>
+                              .
+                            </p>
+                          )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="min-h-11 w-full touch-manipulation"
+                          disabled={
+                            maxChildProfiles != null &&
+                            profiles.length >= maxChildProfiles
                           }
-                        }}
-                    >
-                      Save as profile for next time
-                    </Button>
+                          onClick={async () => {
+                            try {
+                              const pronouns =
+                                form.pronouns === "custom"
+                                  ? customPronoun
+                                  : form.pronouns;
+                              const res = await fetch("/api/child-profiles", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  name: form.childName.trim(),
+                                  age: form.age,
+                                  pronouns: pronouns || "they/them",
+                                  interests: form.interests,
+                                  appearance: form.appearance ?? {},
+                                }),
+                              });
+                              const body = (await res
+                                .json()
+                                .catch(() => ({}))) as Record<string, unknown>;
+                              if (!res.ok) {
+                                toast.error(
+                                  typeof body.error === "string"
+                                    ? body.error
+                                    : "Could not save profile."
+                                );
+                                return;
+                              }
+                              const profile = body as unknown as ChildProfile;
+                              setProfiles((prev) => [profile, ...prev]);
+                              setSelectedProfileId(profile.id);
+                              toast.success(
+                                `Saved "${profile.name}" as a profile.`
+                              );
+                            } catch {
+                              toast.error("Could not save profile.");
+                            }
+                          }}
+                        >
+                          Save as profile for next time
+                        </Button>
+                      </div>
                     )}
                   </motion.div>
                 )}

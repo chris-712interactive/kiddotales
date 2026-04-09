@@ -79,6 +79,10 @@ function testCapabilityProgressionMonotonic() {
   assert.ok(free.priorityWeight <= spark.priorityWeight);
   assert.ok(spark.priorityWeight <= magic.priorityWeight);
   assert.ok(magic.priorityWeight <= legend.priorityWeight);
+
+  assert.ok(free.maxChildProfiles <= spark.maxChildProfiles);
+  assert.ok(spark.maxChildProfiles <= magic.maxChildProfiles);
+  assert.ok(magic.maxChildProfiles <= legend.maxChildProfiles);
 }
 
 testEntitlementsSnapshotByTier();

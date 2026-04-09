@@ -422,7 +422,7 @@ export async function getUserBookCountByPeriod(
   let query = supabase
     .from("user_book_usage_events")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .eq("billing_user_id", userId);
 
   if (period === "monthly") {
     query = query
@@ -490,7 +490,7 @@ export async function getUserVoiceCountByPeriod(
   const { count, error } = await supabase
     .from("user_voice_usage_events")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
+    .eq("billing_user_id", userId)
     .gte("created_at", start.toISOString())
     .lt("created_at", end.toISOString());
 
@@ -514,11 +514,14 @@ export async function hasBookUsedVoiceSlot(bookId: string): Promise<boolean> {
 /** Record a voice usage event when a book first gets AI voice. */
 export async function insertVoiceUsageEvent(
   userId: string,
-  bookId: string
+  bookId: string,
+  billingUserId?: string
 ): Promise<void> {
   const supabase = createSupabaseAdmin();
+  const billTo = billingUserId ?? userId;
   await supabase.from("user_voice_usage_events").insert({
     user_id: userId,
+    billing_user_id: billTo,
     book_id: bookId,
     created_at: new Date().toISOString(),
   });
@@ -527,11 +530,14 @@ export async function insertVoiceUsageEvent(
 /** Record a book creation usage event (transaction log). */
 export async function insertBookUsageEvent(
   userId: string,
-  bookId?: string
+  bookId?: string,
+  billingUserId?: string
 ): Promise<void> {
   const supabase = createSupabaseAdmin();
+  const billTo = billingUserId ?? userId;
   await supabase.from("user_book_usage_events").insert({
     user_id: userId,
+    billing_user_id: billTo,
     book_id: bookId ?? null,
     created_at: new Date().toISOString(),
   });

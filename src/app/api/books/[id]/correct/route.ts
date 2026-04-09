@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
   getBookById,
-  getUserProfile,
   updateBookPages,
   updateBookForNameCorrection,
   getBookLimitForUser,
@@ -12,6 +11,7 @@ import { ART_STYLE_PROMPTS } from "@/lib/constants";
 import { uploadImageToStorage } from "@/lib/supabase-storage";
 import Replicate from "replicate";
 import { getTierCapabilities } from "@/lib/entitlements";
+import { resolveFamilyPlanContext } from "@/lib/family-sharing";
 import type { CreationMetadata, CharacterAppearance } from "@/types";
 
 /** Compare form data with metadata. Returns true if only childName changed. */
@@ -93,8 +93,8 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const profile = await getUserProfile(session.user.id);
-  const tier = profile?.subscriptionTier ?? "free";
+  const plan = await resolveFamilyPlanContext(session.user.id);
+  const tier = plan.featureTier;
   const tierCapabilities = getTierCapabilities(tier);
   if (tier === "free" || tierCapabilities.correctionMode === "none") {
     return NextResponse.json(
@@ -282,8 +282,8 @@ export async function POST(
   }
 
   if (!nameOnly) {
-    const { limit, period } = await getBookLimitForUser(session.user.id);
-    const count = await getUserBookCountByPeriod(session.user.id, period);
+    const { limit, period } = await getBookLimitForUser(plan.billingUserId);
+    const count = await getUserBookCountByPeriod(plan.billingUserId, period);
     const effectiveLimit = count === 0 ? limit + 1 : limit;
     if (count >= effectiveLimit) {
       return NextResponse.json(

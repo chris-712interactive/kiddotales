@@ -3,7 +3,7 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import sharp from "sharp";
 import type { BookData } from "@/types";
 import { auth } from "@/auth";
-import { getUserProfile } from "@/lib/db";
+import { resolveFamilyPlanContext } from "@/lib/family-sharing";
 import { getTierCapabilities } from "@/lib/entitlements";
 
 const A4_PORTRAIT = { width: 595, height: 842 };
@@ -105,8 +105,10 @@ async function embedImage(
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    const profile = session?.user?.id ? await getUserProfile(session.user.id) : null;
-    const pdfLevel = getTierCapabilities(profile?.subscriptionTier ?? "free").pdfLevel;
+    const plan = session?.user?.id
+      ? await resolveFamilyPlanContext(session.user.id)
+      : null;
+    const pdfLevel = getTierCapabilities(plan?.featureTier ?? "free").pdfLevel;
 
     const body = (await request.json()) as
       | { book: BookData; orientation?: "portrait" | "landscape"; pdfVariant?: PdfVariant }

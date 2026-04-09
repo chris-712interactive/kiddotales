@@ -21,6 +21,8 @@ import {
   updatePrintOrder,
 } from "@/lib/print-db";
 import { fulfillPrintOrderToLulu } from "@/lib/print-fulfillment";
+import { revokeFamilySharingForOwner } from "@/lib/family-sharing";
+import { getTierCapabilities } from "@/lib/entitlements";
 
 /** Stripe webhook handler. Must use raw body for signature verification. */
 export async function POST(req: NextRequest) {
@@ -227,13 +229,17 @@ export async function POST(req: NextRequest) {
         const tier = priceId ? getTierFromPriceId(priceId) : null;
         const activeStatuses = ["active", "trialing"];
 
+        const effectiveTier = activeStatuses.includes(sub.status)
+          ? (tier ?? "spark")
+          : "free";
         await updateSubscriptionFromStripe(userId, {
           stripeSubscriptionStatus: sub.status,
           stripePriceId: priceId,
-          subscriptionTier: activeStatuses.includes(sub.status)
-            ? (tier ?? "spark")
-            : "free",
+          subscriptionTier: effectiveTier,
         });
+        if (getTierCapabilities(effectiveTier).sharingSeats === 0) {
+          await revokeFamilySharingForOwner(userId);
+        }
         break;
       }
 
@@ -250,6 +256,7 @@ export async function POST(req: NextRequest) {
           tierUpgradeAt: null,
           tierBeforeUpgrade: null,
         });
+        await revokeFamilySharingForOwner(userId);
         break;
       }
 
@@ -272,15 +279,19 @@ export async function POST(req: NextRequest) {
         const tier = priceId ? getTierFromPriceId(priceId) : null;
         const activeStatuses = ["active", "trialing"];
 
+        const effectiveTierSched = activeStatuses.includes(sub.status)
+          ? (tier ?? "spark")
+          : "free";
         await updateSubscriptionFromStripe(userId, {
           stripeSubscriptionStatus: sub.status,
           stripePriceId: priceId,
-          subscriptionTier: activeStatuses.includes(sub.status)
-            ? (tier ?? "spark")
-            : "free",
+          subscriptionTier: effectiveTierSched,
           tierUpgradeAt: null,
           tierBeforeUpgrade: null,
         });
+        if (getTierCapabilities(effectiveTierSched).sharingSeats === 0) {
+          await revokeFamilySharingForOwner(userId);
+        }
         break;
       }
 

@@ -13,6 +13,10 @@ import { getStripe, getVoiceLimitForTier, getVoicesForTier } from "@/lib/stripe"
 import { getTierCapabilities } from "@/lib/entitlements";
 import { isAdminEmail } from "@/lib/admin";
 import { getAffiliateByUserId } from "@/lib/affiliates";
+import {
+  resolveFamilyPlanContext,
+  getFamilySharingDashboard,
+} from "@/lib/family-sharing";
 
 export async function GET() {
   const session = await auth();
@@ -23,9 +27,9 @@ export async function GET() {
   const userId = session.user.id as string;
   try {
     await ensureUser(userId, session.user.email ?? undefined);
-    const [profile, limitConfig] = await Promise.all([
+    const [profile, plan] = await Promise.all([
       getUserProfile(userId),
-      getBookLimitForUser(userId),
+      resolveFamilyPlanContext(userId),
     ]);
 
     if (!profile) {
@@ -35,16 +39,21 @@ export async function GET() {
       );
     }
 
-    const [bookCount, voiceCount, affiliate, childProfiles] = await Promise.all([
-      getUserBookCountByPeriod(userId, limitConfig.period),
-      getUserVoiceCountByPeriod(userId, limitConfig.period),
-      getAffiliateByUserId(userId),
-      getChildProfiles(userId),
-    ]);
+    const limitConfig = await getBookLimitForUser(plan.billingUserId);
 
-    const voiceLimit = getVoiceLimitForTier(profile.subscriptionTier);
-    const voiceOptions = getVoicesForTier(profile.subscriptionTier);
-    const tierCapabilities = getTierCapabilities(profile.subscriptionTier);
+    const [bookCount, voiceCount, affiliate, childProfiles, familySharing] =
+      await Promise.all([
+        getUserBookCountByPeriod(plan.billingUserId, limitConfig.period),
+        getUserVoiceCountByPeriod(plan.billingUserId, limitConfig.period),
+        getAffiliateByUserId(userId),
+        getChildProfiles(userId),
+        getFamilySharingDashboard(userId, profile),
+      ]);
+
+    const featureTier = plan.featureTier;
+    const voiceLimit = getVoiceLimitForTier(featureTier);
+    const voiceOptions = getVoicesForTier(featureTier);
+    const tierCapabilities = getTierCapabilities(featureTier);
     const allowedArtStyles = tierCapabilities.allowedArtStyles;
 
     let nextBillingDate: string | null = null;
@@ -88,7 +97,10 @@ export async function GET() {
       pdfLevel: tierCapabilities.pdfLevel,
       maxChildProfiles: tierCapabilities.maxChildProfiles,
       childProfileCount: childProfiles.length,
-      subscriptionTier: profile.subscriptionTier,
+      subscriptionTier: featureTier,
+      accountSubscriptionTier: profile.subscriptionTier,
+      familySharingOwnerId: plan.familyOwnerId,
+      familySharing,
       theme: profile.theme,
       nextBillingDate,
       subscriptionStatus,

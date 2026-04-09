@@ -104,6 +104,47 @@ export async function sendMailgunEmail(message: MailgunMessage): Promise<boolean
   }
 }
 
+export async function sendFamilyShareInviteEmail(params: {
+  to: string;
+  acceptUrl: string;
+}): Promise<boolean> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kiddo-tales.com";
+  return sendMailgunEmail({
+    to: params.to,
+    subject: "You're invited to KiddoTales family sharing",
+    text: [
+      `Someone invited you to share their KiddoTales Legend plan.`,
+      ``,
+      `Sign in with this email address (${params.to}) and open the link below to accept:`,
+      params.acceptUrl,
+      ``,
+      `You'll use the same story limits as the plan owner until they remove you or change plans.`,
+      ``,
+      `If you didn't expect this, you can ignore this email.`,
+      ``,
+      `— KiddoTales`,
+    ].join("\n"),
+    html: `
+    <div style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
+        <tr><td align="center">
+          <table role="presentation" width="100%" style="max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px;">
+            <tr><td>
+              <h1 style="margin:0 0 12px 0;font-size:22px;">Family sharing invite</h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;">
+                You were invited to share a <strong>KiddoTales Legend</strong> plan. Sign in with
+                <strong>${params.to.replace(/</g, "&lt;")}</strong> and tap the button below.
+              </p>
+              <a href="${params.acceptUrl}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;border-radius:10px;padding:12px 18px;font-weight:600;font-size:14px;">Accept invite</a>
+              <p style="margin:20px 0 0 0;font-size:13px;color:#64748b;">Or paste this link: ${params.acceptUrl}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </div>`,
+  });
+}
+
 export async function sendGiftMembershipEmails(params: {
   purchaserEmail?: string | null;
   recipientEmail?: string | null;

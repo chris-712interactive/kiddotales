@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import {
-  getChildProfiles,
-  createChildProfile,
-  getUserProfile,
-} from "@/lib/db";
+import { getChildProfiles, createChildProfile } from "@/lib/db";
 import { getTierCapabilities } from "@/lib/entitlements";
+import { resolveFamilyPlanContext } from "@/lib/family-sharing";
 import type { ChildProfile } from "@/types";
 
 export async function GET() {
@@ -15,11 +12,11 @@ export async function GET() {
   }
 
   const userId = session.user.id;
-  const [profiles, profile] = await Promise.all([
+  const [profiles, plan] = await Promise.all([
     getChildProfiles(userId),
-    getUserProfile(userId),
+    resolveFamilyPlanContext(session.user.id),
   ]);
-  const tier = profile?.subscriptionTier ?? "free";
+  const tier = plan.featureTier;
   const maxChildProfiles = getTierCapabilities(tier).maxChildProfiles;
 
   return NextResponse.json({
@@ -47,13 +44,11 @@ export async function POST(request: NextRequest) {
   }
 
   const userId = session.user.id;
-  const [existing, userProfile] = await Promise.all([
+  const [existing, plan] = await Promise.all([
     getChildProfiles(userId),
-    getUserProfile(userId),
+    resolveFamilyPlanContext(session.user.id),
   ]);
-  const maxChildProfiles = getTierCapabilities(
-    userProfile?.subscriptionTier ?? "free"
-  ).maxChildProfiles;
+  const maxChildProfiles = getTierCapabilities(plan.featureTier).maxChildProfiles;
   if (existing.length >= maxChildProfiles) {
     return NextResponse.json(
       {

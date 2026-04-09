@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield, MessageSquare, Package } from "lucide-react";
+import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield, MessageSquare, Package, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import {
 import { AppHeader } from "@/components/app-header";
 import { FeedbackTrigger } from "@/components/feedback-trigger";
 import { getBookLimitForTier } from "@/lib/stripe";
+import { getTierCapabilities } from "@/lib/entitlements";
 import { toast } from "sonner";
 import ManageBooksPanel from "@/components/settings/manage-books-panel";
 
@@ -38,6 +39,15 @@ type SettingsData = {
   bookLimit: number;
   bookLimitPeriod?: "total" | "monthly";
   subscriptionTier: string;
+  accountSubscriptionTier?: string;
+  familySharing?: {
+    role: "owner" | "member" | null;
+    seatsTotal: number;
+    seatsUsed: number;
+    members: { memberUserId: string; email: string | null }[];
+    pendingInvites: { id: string; invitedEmail: string; expiresAt: string }[];
+    ownerEmail?: string | null;
+  };
   theme?: "light" | "dark";
 };
 
@@ -729,6 +739,25 @@ function SettingsContent() {
                         </Link>
                       )}
                     </div>
+                    {(getTierCapabilities(subscriptionTier).sharingSeats > 0 ||
+                      data.familySharing?.role === "member") && (
+                      <div className="rounded-xl border-2 border-border bg-muted/30 px-4 py-3">
+                        <p className="text-sm font-medium text-foreground">
+                          Family sharing
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {data.familySharing?.role === "member"
+                            ? `You're on a shared Legend plan (${data.familySharing.ownerEmail ?? "subscriber"}).`
+                            : "Invite up to two other adults to share your Legend benefits and story limits."}
+                        </p>
+                        <Link href="/settings/family" className="mt-2 inline-block">
+                          <Button size="sm" variant="secondary">
+                            <Users className="mr-1 size-4" />
+                            Manage family sharing
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

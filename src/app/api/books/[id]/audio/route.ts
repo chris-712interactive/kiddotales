@@ -3,13 +3,13 @@ import OpenAI from "openai";
 import { auth } from "@/auth";
 import {
   getBookById,
-  getUserProfile,
   getBookLimitForUser,
   getUserVoiceCountByPeriod,
   hasBookUsedVoiceSlot,
   insertVoiceUsageEvent,
   updateBookPagesWithAudio,
 } from "@/lib/db";
+import { resolveFamilyPlanContext } from "@/lib/family-sharing";
 import {
   getVoiceLimitForTier,
   getVoicesForTier,
@@ -51,8 +51,8 @@ export async function POST(
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
-    const profile = await getUserProfile(userId);
-    const tier = profile?.subscriptionTier ?? "free";
+    const plan = await resolveFamilyPlanContext(userId);
+    const tier = plan.featureTier;
 
     if (tier === "free") {
       return NextResponse.json(
@@ -69,8 +69,8 @@ export async function POST(
       ? preferredVoice
       : allowedVoices[0] ?? TTS_DEFAULT_VOICE;
 
-    const { limit: _bookLimit, period } = await getBookLimitForUser(userId);
-    const voiceCount = await getUserVoiceCountByPeriod(userId, period);
+    const { limit: _bookLimit, period } = await getBookLimitForUser(plan.billingUserId);
+    const voiceCount = await getUserVoiceCountByPeriod(plan.billingUserId, period);
     const alreadyUsed = await hasBookUsedVoiceSlot(bookId);
 
     if (!alreadyUsed && voiceCount >= voiceLimit) {
@@ -132,7 +132,7 @@ export async function POST(
       await updateBookPagesWithAudio(bookId, userId, updates);
 
       if (!alreadyUsed) {
-        await insertVoiceUsageEvent(userId, bookId);
+        await insertVoiceUsageEvent(userId, bookId, plan.billingUserId);
       }
     }
 

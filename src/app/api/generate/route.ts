@@ -27,6 +27,10 @@ import {
   TTS_DEFAULT_VOICE,
 } from "@/lib/stripe";
 import { getTierCapabilities } from "@/lib/entitlements";
+import {
+  resolveFamilyPlanContext,
+  type FamilyPlanContext,
+} from "@/lib/family-sharing";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
 
@@ -214,10 +218,13 @@ export async function POST(request: NextRequest) {
     }
 
     const isCorrection = Boolean(updateBookId);
+    let familyPlan: FamilyPlanContext | null = null;
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       await ensureUser(userId, userEmail);
+      familyPlan = await resolveFamilyPlanContext(userId);
       const profile = await getUserProfile(userId);
-      const tier = profile?.subscriptionTier ?? "free";
+      const tier = familyPlan.featureTier;
+      const billingUserId = familyPlan.billingUserId;
       const allowedArtStyles = getTierCapabilities(tier).allowedArtStyles;
       if (
         typeof artStyle === "string" &&
@@ -238,8 +245,8 @@ export async function POST(request: NextRequest) {
         );
       }
       if (!isCorrection) {
-        const { limit, period } = await getBookLimitForUser(userId);
-        const count = await getUserBookCountByPeriod(userId, period);
+        const { limit, period } = await getBookLimitForUser(billingUserId);
+        const count = await getUserBookCountByPeriod(billingUserId, period);
         const effectiveLimit = count === 0 ? limit + 1 : limit;
         if (count >= effectiveLimit) {
           const periodMsg = period === "monthly" ? "this month" : "total";
@@ -528,7 +535,10 @@ export async function POST(request: NextRequest) {
 
     if (hasSupabase) {
       try {
-        const { period } = await getBookLimitForUser(userId);
+        if (!familyPlan) familyPlan = await resolveFamilyPlanContext(userId);
+        const billingUserId = familyPlan.billingUserId;
+        const featureTier = familyPlan.featureTier;
+        const { period } = await getBookLimitForUser(billingUserId);
         const bookId = updateBookId ?? crypto.randomUUID();
         const storagePath = (name: string) => `books/${bookId}/${name}`;
 
@@ -576,8 +586,7 @@ export async function POST(request: NextRequest) {
           dedication: dedicationData ?? undefined,
         };
 
-        const profile = await getUserProfile(userId);
-        const subscriptionTierAtCreation = profile?.subscriptionTier ?? "free";
+        const subscriptionTierAtCreation = featureTier;
 
         if (updateBookId) {
           await replaceBook(bookId, userId, savedBook, creationMetadata);
@@ -591,7 +600,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        await insertBookUsageEvent(userId, bookId);
+        await insertBookUsageEvent(userId, bookId, billingUserId);
 
         book = { ...book, creationMetadata };
 
@@ -603,18 +612,16 @@ export async function POST(request: NextRequest) {
         if (wantsAiVoice) {
           console.log("[KiddoTales] Starting AI voice generation, preferredVoice:", preferredVoice);
           try {
-            const profile = await getUserProfile(userId);
-            const tier = profile?.subscriptionTier ?? "free";
-            if (tier === "free") {
+            if (featureTier === "free") {
               console.log("[KiddoTales] Skipping AI voice: user tier is free");
             } else {
-              const voiceLimit = getVoiceLimitForTier(tier);
-              const allowedVoices = getVoicesForTier(tier);
+              const voiceLimit = getVoiceLimitForTier(featureTier);
+              const allowedVoices = getVoicesForTier(featureTier);
               const voice = allowedVoices.includes(preferredVoice)
                 ? preferredVoice
                 : allowedVoices[0] ?? TTS_DEFAULT_VOICE;
-              const { period } = await getBookLimitForUser(userId);
-              const voiceCount = await getUserVoiceCountByPeriod(userId, period);
+              const { period } = await getBookLimitForUser(billingUserId);
+              const voiceCount = await getUserVoiceCountByPeriod(billingUserId, period);
               const alreadyUsed = await hasBookUsedVoiceSlot(bookId);
 
               if (!alreadyUsed && voiceCount >= voiceLimit) {
@@ -660,7 +667,7 @@ export async function POST(request: NextRequest) {
                   if (!updated) {
                     console.error("[KiddoTales] updateBookPagesWithAudio failed - audio files uploaded but DB not updated");
                   } else if (!alreadyUsed) {
-                    await insertVoiceUsageEvent(userId, bookId);
+                    await insertVoiceUsageEvent(userId, bookId, billingUserId);
                   }
                   // Always merge into response so client gets audio (files are in storage)
                   book = {

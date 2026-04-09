@@ -50,6 +50,7 @@ import {
 } from "@/types";
 import { ParentalConsentModal } from "@/components/parental-consent-modal";
 import { TTS_VOICE_LABELS } from "@/lib/stripe";
+import type { ArtStyleId } from "@/lib/entitlements";
 
 const ART_STYLE_CARDS = [
   {
@@ -88,6 +89,8 @@ const ART_STYLE_CARDS = [
     image: undefined,
   },
 ];
+
+const ALL_ART_STYLE_IDS = ART_STYLE_CARDS.map((s) => s.id) as ArtStyleId[];
 
 const CREATE_FLOW_STEPS: { num: number; label: string; icon: LucideIcon }[] = [
   { num: 1, label: "Start", icon: CheckCircle2 },
@@ -224,6 +227,7 @@ function CreatePageContent() {
 
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
   const [voiceOptions, setVoiceOptions] = useState<string[]>([]);
+  const [allowedArtStyles, setAllowedArtStyles] = useState<ArtStyleId[]>(ALL_ART_STYLE_IDS);
   const [playingSample, setPlayingSample] = useState<string | null>(null);
   const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -450,15 +454,31 @@ function CreatePageContent() {
         .then((data) => {
           if (data?.subscriptionTier) setSubscriptionTier(data.subscriptionTier);
           if (Array.isArray(data?.voiceOptions)) setVoiceOptions(data.voiceOptions);
+          if (Array.isArray(data?.allowedArtStyles) && data.allowedArtStyles.length > 0) {
+            setAllowedArtStyles(
+              data.allowedArtStyles.filter((id: unknown): id is ArtStyleId =>
+                ALL_ART_STYLE_IDS.includes(id as ArtStyleId)
+              )
+            );
+          } else {
+            setAllowedArtStyles(ALL_ART_STYLE_IDS);
+          }
           setSettingsFetched(true);
         })
         .catch(() => setSettingsFetched(true));
     } else {
       setSubscriptionTier("free");
       setVoiceOptions([]);
+      setAllowedArtStyles(ALL_ART_STYLE_IDS);
       setSettingsFetched(true);
     }
   }, [status]);
+
+  useEffect(() => {
+    if (allowedArtStyles.includes(form.artStyle as ArtStyleId)) return;
+    const fallback = allowedArtStyles[0] ?? "whimsical-watercolor";
+    setForm((prev) => ({ ...prev, artStyle: fallback }));
+  }, [allowedArtStyles, form.artStyle]);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) {
@@ -542,6 +562,13 @@ function CreatePageContent() {
       return;
     }
 
+    if (outOfCredits) {
+      toast.error("You're out of credits. Upgrade your plan to create more books.");
+      isSubmittingRef.current = false;
+      router.push("/pricing");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
@@ -593,6 +620,11 @@ function CreatePageContent() {
 
   const resolvedPronouns = form.pronouns === "custom" ? customPronoun : form.pronouns;
   const resolvedLifeLesson = form.lifeLesson === "custom" ? customLifeLesson : form.lifeLesson;
+  const unavailableArtStyleCount = ART_STYLE_CARDS.filter(
+    (style) => !allowedArtStyles.includes(style.id as ArtStyleId)
+  ).length;
+  const creditsRemaining = bookCount ? Math.max(0, bookCount.limit - bookCount.count) : null;
+  const outOfCredits = creditsRemaining !== null && creditsRemaining <= 0;
 
   if (isLoading) return <LoadingScreen showSteps hasAiVoice={!!(form.preferredVoice && form.preferredVoice !== "none")} />;
 
@@ -1170,6 +1202,22 @@ function CreatePageContent() {
                     <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
                       Choose the art style for your story&apos;s illustrations.
                     </p>
+                    {unavailableArtStyleCount > 0 && (
+                        <div className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+                          <p className="text-sm text-muted-foreground">
+                            {status === "authenticated" ? (
+                              <>
+                                <Link href="/pricing" className="font-medium text-primary underline hover:no-underline">
+                                  Upgrade your plan
+                                </Link>
+                                {" "}to unlock all illustration styles.
+                              </>
+                            ) : (
+                              "Sign in and upgrade your plan to unlock all illustration styles."
+                            )}
+                          </p>
+                        </div>
+                    )}
                     <div className="space-y-3">
                       <Label>Art style</Label>
                       <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
@@ -1183,13 +1231,16 @@ function CreatePageContent() {
                             <Card
                               className={cn(
                                 "cursor-pointer transition-all active:ring-2 active:ring-primary/40",
+                                !allowedArtStyles.includes(style.id as ArtStyleId) &&
+                                  "cursor-not-allowed opacity-60 hover:border-border",
                                 form.artStyle === style.id
                                   ? "ring-2 ring-primary"
                                   : "hover:border-primary/50"
                               )}
-                              onClick={() =>
-                                setForm((prev) => ({ ...prev, artStyle: style.id }))
-                              }
+                              onClick={() => {
+                                if (!allowedArtStyles.includes(style.id as ArtStyleId)) return;
+                                setForm((prev) => ({ ...prev, artStyle: style.id }));
+                              }}
                             >
                               <div className="h-36 overflow-hidden rounded-t-xl sm:h-40">
                                 {style.image ? (
@@ -1208,8 +1259,13 @@ function CreatePageContent() {
                                 )}
                               </div>
                               <CardHeader className="py-3">
-                                <CardTitle className="text-base">
+                                <CardTitle className="text-base flex items-center gap-2">
                                   {style.label}
+                                  {!allowedArtStyles.includes(style.id as ArtStyleId) && (
+                                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                      Locked
+                                    </span>
+                                  )}
                                 </CardTitle>
                                 <p className="text-xs text-muted-foreground">
                                   {style.description}
@@ -1408,6 +1464,16 @@ function CreatePageContent() {
                   Next
                   <ChevronRight className="ml-1 size-4" />
                 </Button>
+              ) : outOfCredits ? (
+                <Link href="/pricing" className="min-w-0 flex-1 sm:flex-none">
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="min-h-12 w-full min-w-0 touch-manipulation sm:min-h-14 sm:min-w-[220px]"
+                  >
+                    Upgrade Plan to Create More Books
+                  </Button>
+                </Link>
               ) : (
                 <Button
                   type="submit"

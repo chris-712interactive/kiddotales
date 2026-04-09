@@ -25,6 +25,7 @@ import { CorrectionModal } from "@/components/correction-modal";
 import { AppHeader } from "@/components/app-header";
 import { useSession } from "next-auth/react";
 import { PENDING_BOOK_KEY, PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
+import type { CorrectionMode } from "@/lib/entitlements";
 
 function BookViewerContent() {
   const searchParams = useSearchParams();
@@ -38,6 +39,7 @@ function BookViewerContent() {
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
+  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>("none");
   const [printOrderingEnabled, setPrintOrderingEnabled] = useState(false);
   const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
   const { data: session } = useSession();
@@ -46,10 +48,18 @@ function BookViewerContent() {
     if (session?.user) {
       fetch("/api/user/settings")
         .then((r) => (r.ok ? r.json() : null))
-        .then((res) => res && setSubscriptionTier(res.subscriptionTier ?? "free"))
-        .catch(() => setSubscriptionTier("free"));
+        .then((res) => {
+          if (!res) return;
+          setSubscriptionTier(res.subscriptionTier ?? "free");
+          setCorrectionMode((res.correctionMode as CorrectionMode) ?? "none");
+        })
+        .catch(() => {
+          setSubscriptionTier("free");
+          setCorrectionMode("none");
+        });
     } else {
       setSubscriptionTier(null);
+      setCorrectionMode("none");
     }
   }, [session?.user]);
 
@@ -670,6 +680,8 @@ function BookViewerContent() {
               pages: book.pages,
               creationMetadata: book.creationMetadata,
             }}
+            correctionMode={correctionMode}
+            currentPageIndex={hasDedication ? Math.max(0, currentPage - 1) : currentPage}
             onClose={() => setShowCorrectionModal(false)}
             onSuccess={(updated) => {
               setBook({

@@ -57,6 +57,8 @@ function DashboardView({
   const tierConfig = SUBSCRIPTION_TIERS[data.subscriptionTier as keyof typeof SUBSCRIPTION_TIERS] ?? SUBSCRIPTION_TIERS.free;
   const usageLabel =
     data.bookLimitPeriod === "monthly" ? "this month" : "total";
+  const creditsLeft = Math.max(0, data.bookLimit - data.bookCount);
+  const outOfCredits = creditsLeft <= 0;
   const nextChargeLabel = data.cancelAtPeriodEnd
     ? "Access until"
     : "Next charge";
@@ -78,10 +80,10 @@ function DashboardView({
             Ready to create another bedtime story?
           </p>
         </div>
-        <Link href="/create" className="shrink-0">
+        <Link href={outOfCredits ? "/pricing" : "/create"} className="shrink-0">
           <Button size="lg" className="text-lg">
             <BookOpen className="mr-2 size-5" />
-            Create a book
+            {outOfCredits ? "Upgrade Plan to Create More Books" : "Create a book"}
           </Button>
         </Link>
       </motion.section>

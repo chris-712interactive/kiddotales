@@ -3,10 +3,15 @@ import { auth } from "@/auth";
 import {
   getBookById,
   getUserProfile,
+  updateBookPages,
   updateBookForNameCorrection,
   getBookLimitForUser,
   getUserBookCountByPeriod,
 } from "@/lib/db";
+import { ART_STYLE_PROMPTS } from "@/lib/constants";
+import { uploadImageToStorage } from "@/lib/supabase-storage";
+import Replicate from "replicate";
+import { getTierCapabilities } from "@/lib/entitlements";
 import type { CreationMetadata, CharacterAppearance } from "@/types";
 
 /** Compare form data with metadata. Returns true if only childName changed. */
@@ -42,6 +47,43 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const REPLICATE_FLUX_IMAGE_MODEL =
+  "black-forest-labs/flux-2-pro" as `${string}/${string}`;
+
+function buildAppearancePrefix(
+  childName: string,
+  age: number,
+  pronouns: string,
+  appearance?: CharacterAppearance
+): string | null {
+  if (!appearance || typeof appearance !== "object") return null;
+  const a = appearance as Record<string, unknown>;
+  const hasAny =
+    a.hairColor || a.hairStyle || a.skinTone || a.eyeColor || a.glasses || a.freckles;
+  if (!hasAny) return null;
+
+  const isGirl = /she\/her|girl/i.test(pronouns || "");
+  const isBoy = /he\/him|boy/i.test(pronouns || "");
+  const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
+  const parts: string[] = [`A ${age}-year-old ${genderPhrase} named ${childName}`];
+
+  const hair: string[] = [];
+  if (a.hairColor && typeof a.hairColor === "string") hair.push(a.hairColor);
+  if (a.hairStyle && typeof a.hairStyle === "string") hair.push(a.hairStyle);
+  if (hair.length) parts.push(`${hair.join(" ")} hair`);
+  if (a.skinTone && typeof a.skinTone === "string") parts.push(`${a.skinTone} skin`);
+  if (a.eyeColor && typeof a.eyeColor === "string") parts.push(`${a.eyeColor} eyes`);
+  if (a.glasses) parts.push("wearing glasses");
+  if (a.freckles) parts.push("freckles");
+
+  return (
+    parts.join(", ") +
+    ", human ears, no animal features, modest age-appropriate fully clothed outfit, children's book illustration style."
+  );
+}
+
+type CorrectionMode = "full-regenerate" | "single-page";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -52,7 +94,9 @@ export async function POST(
   }
 
   const profile = await getUserProfile(session.user.id);
-  if (profile?.subscriptionTier === "free") {
+  const tier = profile?.subscriptionTier ?? "free";
+  const tierCapabilities = getTierCapabilities(tier);
+  if (tier === "free" || tierCapabilities.correctionMode === "none") {
     return NextResponse.json(
       { error: "Upgrade your plan to correct books." },
       { status: 403 }
@@ -78,6 +122,9 @@ export async function POST(
     lifeLesson,
     artStyle,
     appearance,
+    correctionMode,
+    pageIndex,
+    regenReason,
   } = body as {
     childName?: string;
     age?: number;
@@ -86,7 +133,12 @@ export async function POST(
     lifeLesson?: string;
     artStyle?: string;
     appearance?: CharacterAppearance;
+    correctionMode?: CorrectionMode;
+    pageIndex?: number;
+    regenReason?: string;
   };
+  const trimmedRegenReason =
+    typeof regenReason === "string" ? regenReason.trim().slice(0, 300) : "";
 
   if (!childName?.trim()) {
     return NextResponse.json(
@@ -109,6 +161,92 @@ export async function POST(
   };
 
   const nameOnly = isNameOnlyChange(meta, corrected);
+  const requestedMode: CorrectionMode = correctionMode ?? "full-regenerate";
+
+  if (requestedMode === "single-page") {
+    if (tierCapabilities.correctionMode !== "single-page") {
+      return NextResponse.json(
+        { error: "Single-page regeneration is available on Magic and Legend plans." },
+        { status: 403 }
+      );
+    }
+    if (!process.env.REPLICATE_API_TOKEN) {
+      return NextResponse.json(
+        { error: "Image generation is not configured." },
+        { status: 500 }
+      );
+    }
+    if (typeof pageIndex !== "number" || !Number.isInteger(pageIndex)) {
+      return NextResponse.json({ error: "A valid page index is required." }, { status: 400 });
+    }
+    if (pageIndex < 0 || pageIndex >= book.pages.length) {
+      return NextResponse.json({ error: "Page index is out of range." }, { status: 400 });
+    }
+
+    const target = book.pages[pageIndex];
+    const effectiveArtStyle = corrected.artStyle || "whimsical-watercolor";
+    const styleSuffix = ART_STYLE_PROMPTS[effectiveArtStyle] ?? "";
+    const characterPrefix = buildAppearancePrefix(
+      corrected.childName,
+      corrected.age,
+      corrected.pronouns,
+      corrected.appearance
+    );
+    const basePrompt =
+      target.illustrationPromptBase ??
+      target.imagePrompt ??
+      `${target.text}. Children's book illustration.`;
+    const prompt = characterPrefix
+      ? `${characterPrefix}. ${basePrompt}. ${styleSuffix}`
+      : `${basePrompt}. ${styleSuffix}`;
+    const finalPrompt = trimmedRegenReason
+      ? `${prompt}. Parent requested change for this page: ${trimmedRegenReason}`
+      : prompt;
+
+    try {
+      const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+      const result = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
+        input: {
+          prompt: finalPrompt,
+          output_format: "png",
+          aspect_ratio: "4:5",
+          resolution: process.env.REPLICATE_FLUX_RESOLUTION?.trim() || "4 MP",
+          safety_tolerance: 4,
+        },
+      });
+      let imageUrl = "";
+      if (typeof result === "string") imageUrl = result;
+      else if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
+        imageUrl = (result as { url: () => string }).url();
+      }
+      if (!imageUrl) {
+        return NextResponse.json({ error: "Failed to generate page image." }, { status: 500 });
+      }
+
+      const storagePath = `books/${bookId}/page-${pageIndex}.png`;
+      const storedImageUrl = await uploadImageToStorage(imageUrl, storagePath);
+      const finalImageUrl = storedImageUrl ?? imageUrl;
+      const updatedPages = book.pages.map((p, idx) =>
+        idx === pageIndex ? { ...p, imageUrl: finalImageUrl } : p
+      );
+      const ok = await updateBookPages(bookId, session.user.id, updatedPages);
+      if (!ok) {
+        return NextResponse.json({ error: "Failed to save regenerated page." }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        cost: 0,
+        pageIndex,
+        book: { ...book, pages: updatedPages },
+      });
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Single-page regeneration failed." },
+        { status: 500 }
+      );
+    }
+  }
 
   if (nameOnly) {
     const oldName = meta?.childName ?? "";
@@ -180,6 +318,7 @@ export async function POST(
         appearance: corrected.appearance,
         dedication: corrected.dedication,
         preferredVoice: corrected.preferredVoice,
+        regenReason: trimmedRegenReason || undefined,
       }),
     });
 

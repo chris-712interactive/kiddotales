@@ -26,6 +26,7 @@ import {
   getVoicesForTier,
   TTS_DEFAULT_VOICE,
 } from "@/lib/stripe";
+import { getTierCapabilities } from "@/lib/entitlements";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
 
@@ -197,7 +198,8 @@ export async function POST(request: NextRequest) {
       appearance,
       preferredVoice,
       dedication,
-    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string } } & typeof body;
+      regenReason,
+    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string }; regenReason?: string } & typeof body;
 
     const validation = validateCreatePayload(body);
     if (!validation.ok) {
@@ -215,6 +217,20 @@ export async function POST(request: NextRequest) {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       await ensureUser(userId, userEmail);
       const profile = await getUserProfile(userId);
+      const tier = profile?.subscriptionTier ?? "free";
+      const allowedArtStyles = getTierCapabilities(tier).allowedArtStyles;
+      if (
+        typeof artStyle === "string" &&
+        !allowedArtStyles.includes(artStyle as (typeof allowedArtStyles)[number])
+      ) {
+        return NextResponse.json(
+          {
+            error: "This art style is not included in your current plan.",
+            allowedArtStyles,
+          },
+          { status: 403 }
+        );
+      }
       if (!profile?.parentConsentAt) {
         return NextResponse.json(
           { error: "Parental consent required. Please complete the consent flow before creating books." },
@@ -254,6 +270,7 @@ export async function POST(request: NextRequest) {
       childName,
       Array.isArray(interests) ? interests.join(" ") : "",
       lifeLesson || "",
+      typeof regenReason === "string" ? regenReason : "",
       typeof appearance === "object" && appearance
         ? JSON.stringify(appearance)
         : "",
@@ -279,7 +296,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Generate story with GPT-4o
-    const userPrompt = getStoryUserPrompt({
+    const trimmedRegenReason =
+      typeof regenReason === "string" ? regenReason.trim().slice(0, 300) : "";
+    const baseUserPrompt = getStoryUserPrompt({
       childName,
       age: age || 5,
       pronouns: pronouns || "",
@@ -288,6 +307,9 @@ export async function POST(request: NextRequest) {
       artStyle: artStyle || "whimsical-watercolor",
       appearance,
     });
+    const userPrompt = trimmedRegenReason
+      ? `${baseUserPrompt}\n\nParent feedback for this regeneration (highest priority to address while keeping the story cozy and age-appropriate): ${trimmedRegenReason}`
+      : baseUserPrompt;
 
     const systemPrompt = STORY_SYSTEM_PROMPT
       .replace("[AGE]", String(age || 5))

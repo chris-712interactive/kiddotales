@@ -9,6 +9,7 @@ import {
   getBookLimitForUser,
 } from "@/lib/db";
 import { getStripe, getVoiceLimitForTier, getVoicesForTier } from "@/lib/stripe";
+import { getTierCapabilities } from "@/lib/entitlements";
 import { isAdminEmail } from "@/lib/admin";
 import { getAffiliateByUserId } from "@/lib/affiliates";
 
@@ -41,6 +42,8 @@ export async function GET() {
 
     const voiceLimit = getVoiceLimitForTier(profile.subscriptionTier);
     const voiceOptions = getVoicesForTier(profile.subscriptionTier);
+    const tierCapabilities = getTierCapabilities(profile.subscriptionTier);
+    const allowedArtStyles = tierCapabilities.allowedArtStyles;
 
     let nextBillingDate: string | null = null;
     let subscriptionStatus: string | null = null;
@@ -78,6 +81,8 @@ export async function GET() {
       voiceCount,
       voiceLimit,
       voiceOptions,
+      allowedArtStyles,
+      correctionMode: tierCapabilities.correctionMode,
       subscriptionTier: profile.subscriptionTier,
       theme: profile.theme,
       nextBillingDate,

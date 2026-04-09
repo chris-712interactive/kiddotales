@@ -6,10 +6,13 @@ import {
   getUserProfile,
   updateSubscriptionFromStripe,
 } from "@/lib/db";
+import { shouldWaiveUpgradeProration } from "@/lib/stripe-upgrade-proration";
 
 /**
  * Change subscription plan (upgrade or downgrade).
- * - Upgrade: Immediate change with proration (customer pays the difference).
+ * - Upgrade: Immediate tier change; proration invoiced unless preview amount is
+ *   below UPGRADE_PRORATION_WAIVER_THRESHOLD_CENTS (default 100 = under $1 USD),
+ *   in which case proration_behavior "none" applies (no charge today; same renewal).
  * - Downgrade: Scheduled for end of current billing period (no change until then).
  * - Ensures only one active subscription per customer.
  */
@@ -96,15 +99,32 @@ export async function POST(req: NextRequest) {
     }
 
     if (newTierRank > currentTierRank) {
-      // Upgrade: immediate change with proration charged now (not at next renewal)
-      // Use subscription_items.update with proration_date to ensure correct proration calc
       const prorationDate = Math.floor(Date.now() / 1000);
-      await stripe.subscriptionItems.update(subscriptionItemId, {
-        price: priceId,
-        proration_behavior: "always_invoice",
-        proration_date: prorationDate,
-        payment_behavior: "error_if_incomplete",
+      const preview = await stripe.invoices.createPreview({
+        customer: sub.customer as string,
+        subscription: profile.stripeSubscriptionId,
+        subscription_details: {
+          items: [{ id: subscriptionItemId, price: priceId }],
+          proration_behavior: "always_invoice",
+          proration_date: prorationDate,
+        },
       });
+      const invoiceAmountCents = preview.amount_due ?? 0;
+      const waive = shouldWaiveUpgradeProration(invoiceAmountCents);
+
+      if (waive) {
+        await stripe.subscriptionItems.update(subscriptionItemId, {
+          price: priceId,
+          proration_behavior: "none",
+        });
+      } else {
+        await stripe.subscriptionItems.update(subscriptionItemId, {
+          price: priceId,
+          proration_behavior: "always_invoice",
+          proration_date: prorationDate,
+          payment_behavior: "error_if_incomplete",
+        });
+      }
 
       const updated = await stripe.subscriptions.retrieve(
         profile.stripeSubscriptionId,
@@ -126,7 +146,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         tier: newTier,
-        message: "Plan upgraded. Prorated charge applied.",
+        prorationWaived: waive,
+        message: waive
+          ? "Plan upgraded. No charge today — your new benefits apply now, and your renewal date stays the same."
+          : "Plan upgraded. Prorated charge applied.",
       });
     }
 

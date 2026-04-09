@@ -45,6 +45,7 @@ export default function PricingContent() {
     priceId: string;
     tierName: string;
     amountFormatted: string;
+    prorationWaived: boolean;
   } | null>(null);
   const [upgradeConfirmLoading, setUpgradeConfirmLoading] = useState(false);
   const [giftLoadingKey, setGiftLoadingKey] = useState<string | null>(null);
@@ -119,6 +120,7 @@ export default function PricingContent() {
             priceId,
             tierName: tierConfig?.name ?? tierId,
             amountFormatted: previewData.amountFormatted ?? "$0.00",
+            prorationWaived: Boolean(previewData.prorationWaived),
           });
           return;
         }
@@ -483,6 +485,7 @@ export default function PricingContent() {
             onClose={() => setUpgradeModal(null)}
             tierName={upgradeModal.tierName}
             amountFormatted={upgradeModal.amountFormatted}
+            prorationWaived={upgradeModal.prorationWaived}
             onConfirm={handleUpgradeConfirm}
             isLoading={upgradeConfirmLoading}
           />

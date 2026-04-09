@@ -5,6 +5,7 @@ import {
   getTierRank,
   type BookLimitPeriod,
 } from "./stripe";
+import { getTierCapabilities } from "./entitlements";
 import type { BookData, CreationMetadata, ChildProfile } from "@/types";
 
 /** @deprecated Use getBookLimitForUser with tier instead */
@@ -538,9 +539,7 @@ export async function insertBookUsageEvent(
 
 /** Max number of saved books to show in history (Spark: 10, Magic/Legend: unlimited). */
 export function getBookHistoryLimit(tier: string): number {
-  if (tier === "magic" || tier === "legend") return 500; // effectively unlimited
-  if (tier === "spark") return 10;
-  return 3; // free
+  return getTierCapabilities(tier).historyLimit;
 }
 
 /** Update user subscription from Stripe webhook data. */

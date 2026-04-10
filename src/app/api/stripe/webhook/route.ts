@@ -15,6 +15,14 @@ import {
   setUserReferredBy,
   hasCommissionForSubscription,
 } from "@/lib/affiliates";
+import {
+  getPrintOrderById,
+  getPrintOrderByStripeSession,
+  updatePrintOrder,
+} from "@/lib/print-db";
+import { fulfillPrintOrderToLulu } from "@/lib/print-fulfillment";
+import { revokeFamilySharingForOwner } from "@/lib/family-sharing";
+import { getTierCapabilities } from "@/lib/entitlements";
 
 /** Stripe webhook handler. Must use raw body for signature verification. */
 export async function POST(req: NextRequest) {
@@ -82,6 +90,59 @@ export async function POST(req: NextRequest) {
               giftCode: gift.code,
               tier: gift.tier,
               durationMonths: gift.durationMonths,
+            });
+          }
+          break;
+        }
+
+        // Lulu print-on-demand (one-time payment)
+        if (session.mode === "payment" && session.metadata?.kind === "lulu_print") {
+          const printOrderId = session.metadata.printOrderId;
+          const userId = session.metadata.userId;
+          if (!printOrderId || !userId) {
+            console.warn("[Stripe webhook] lulu_print: missing printOrderId or userId");
+            break;
+          }
+
+          const order = await getPrintOrderByStripeSession(session.id);
+          if (!order || order.userId !== userId) {
+            console.warn("[Stripe webhook] lulu_print: order mismatch or not found");
+            break;
+          }
+
+          if (order.status !== "awaiting_payment") {
+            break;
+          }
+
+          if (session.payment_status !== "paid") {
+            break;
+          }
+
+          const paidCents = session.amount_total ?? 0;
+          if (paidCents !== order.retailAmountCents) {
+            console.error(
+              "[Stripe webhook] lulu_print: amount mismatch",
+              paidCents,
+              order.retailAmountCents
+            );
+            break;
+          }
+
+          const paymentIntentId =
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id ?? null;
+
+          await updatePrintOrder(printOrderId, {
+            status: "paid",
+            stripePaymentIntentId: paymentIntentId,
+            errorMessage: null,
+          });
+
+          const paidOrder = await getPrintOrderById(printOrderId, userId);
+          if (paidOrder) {
+            void fulfillPrintOrderToLulu(paidOrder).catch((err) => {
+              console.error("[Stripe webhook] lulu_print fulfillment:", err);
             });
           }
           break;
@@ -168,13 +229,17 @@ export async function POST(req: NextRequest) {
         const tier = priceId ? getTierFromPriceId(priceId) : null;
         const activeStatuses = ["active", "trialing"];
 
+        const effectiveTier = activeStatuses.includes(sub.status)
+          ? (tier ?? "spark")
+          : "free";
         await updateSubscriptionFromStripe(userId, {
           stripeSubscriptionStatus: sub.status,
           stripePriceId: priceId,
-          subscriptionTier: activeStatuses.includes(sub.status)
-            ? (tier ?? "spark")
-            : "free",
+          subscriptionTier: effectiveTier,
         });
+        if (getTierCapabilities(effectiveTier).sharingSeats === 0) {
+          await revokeFamilySharingForOwner(userId);
+        }
         break;
       }
 
@@ -191,6 +256,7 @@ export async function POST(req: NextRequest) {
           tierUpgradeAt: null,
           tierBeforeUpgrade: null,
         });
+        await revokeFamilySharingForOwner(userId);
         break;
       }
 
@@ -213,15 +279,19 @@ export async function POST(req: NextRequest) {
         const tier = priceId ? getTierFromPriceId(priceId) : null;
         const activeStatuses = ["active", "trialing"];
 
+        const effectiveTierSched = activeStatuses.includes(sub.status)
+          ? (tier ?? "spark")
+          : "free";
         await updateSubscriptionFromStripe(userId, {
           stripeSubscriptionStatus: sub.status,
           stripePriceId: priceId,
-          subscriptionTier: activeStatuses.includes(sub.status)
-            ? (tier ?? "spark")
-            : "free",
+          subscriptionTier: effectiveTierSched,
           tierUpgradeAt: null,
           tierBeforeUpgrade: null,
         });
+        if (getTierCapabilities(effectiveTierSched).sharingSeats === 0) {
+          await revokeFamilySharingForOwner(userId);
+        }
         break;
       }
 

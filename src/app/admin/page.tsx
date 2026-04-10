@@ -28,6 +28,7 @@ import {
   DollarSign,
   Banknote,
   FileText,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -295,6 +296,19 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">Collect and verify W-9 tax forms</p>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/admin/print" className="block h-full">
+              <Card className="h-full transition-colors hover:border-primary/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Package className="size-5" />
+                    Print (Lulu)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">POD pricing, product SKU, orders</p>
                 </CardContent>
               </Card>
             </Link>

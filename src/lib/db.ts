@@ -5,10 +5,11 @@ import {
   getTierRank,
   type BookLimitPeriod,
 } from "./stripe";
+import { getTierCapabilities } from "./entitlements";
 import type { BookData, CreationMetadata, ChildProfile } from "@/types";
 
 /** @deprecated Use getBookLimitForUser with tier instead */
-const BOOK_LIMIT = parseInt(process.env.BOOK_LIMIT_PER_USER || "3", 10);
+const BOOK_LIMIT = getBookLimitForTier("free").limit;
 
 export type UserProfile = {
   id: string;
@@ -252,8 +253,10 @@ export async function getPurchasedGiftMembershipById(
 /** Ensure user exists in users table. */
 export async function ensureUser(userId: string, email?: string | null): Promise<void> {
   const supabase = createSupabaseAdmin();
+  // Do not set created_at here: upsert runs on every sign-in and would overwrite the
+  // true join date. New rows get created_at from DB default (see 001_initial_schema.sql).
   await supabase.from("users").upsert(
-    { id: userId, email: email || null, created_at: new Date().toISOString() },
+    { id: userId, email: email || null },
     { onConflict: "id" }
   );
 }
@@ -419,7 +422,7 @@ export async function getUserBookCountByPeriod(
   let query = supabase
     .from("user_book_usage_events")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .eq("billing_user_id", userId);
 
   if (period === "monthly") {
     query = query
@@ -487,7 +490,7 @@ export async function getUserVoiceCountByPeriod(
   const { count, error } = await supabase
     .from("user_voice_usage_events")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
+    .eq("billing_user_id", userId)
     .gte("created_at", start.toISOString())
     .lt("created_at", end.toISOString());
 
@@ -511,11 +514,14 @@ export async function hasBookUsedVoiceSlot(bookId: string): Promise<boolean> {
 /** Record a voice usage event when a book first gets AI voice. */
 export async function insertVoiceUsageEvent(
   userId: string,
-  bookId: string
+  bookId: string,
+  billingUserId?: string
 ): Promise<void> {
   const supabase = createSupabaseAdmin();
+  const billTo = billingUserId ?? userId;
   await supabase.from("user_voice_usage_events").insert({
     user_id: userId,
+    billing_user_id: billTo,
     book_id: bookId,
     created_at: new Date().toISOString(),
   });
@@ -524,11 +530,14 @@ export async function insertVoiceUsageEvent(
 /** Record a book creation usage event (transaction log). */
 export async function insertBookUsageEvent(
   userId: string,
-  bookId?: string
+  bookId?: string,
+  billingUserId?: string
 ): Promise<void> {
   const supabase = createSupabaseAdmin();
+  const billTo = billingUserId ?? userId;
   await supabase.from("user_book_usage_events").insert({
     user_id: userId,
+    billing_user_id: billTo,
     book_id: bookId ?? null,
     created_at: new Date().toISOString(),
   });
@@ -536,9 +545,7 @@ export async function insertBookUsageEvent(
 
 /** Max number of saved books to show in history (Spark: 10, Magic/Legend: unlimited). */
 export function getBookHistoryLimit(tier: string): number {
-  if (tier === "magic" || tier === "legend") return 500; // effectively unlimited
-  if (tier === "spark") return 10;
-  return 3; // free
+  return getTierCapabilities(tier).historyLimit;
 }
 
 /** Update user subscription from Stripe webhook data. */

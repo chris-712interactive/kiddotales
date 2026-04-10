@@ -26,6 +26,12 @@ import {
   getVoicesForTier,
   TTS_DEFAULT_VOICE,
 } from "@/lib/stripe";
+import { getTierCapabilities, maxGenerateRequestsPerMinuteForTier } from "@/lib/entitlements";
+import {
+  resolveFamilyPlanContext,
+  type FamilyPlanContext,
+} from "@/lib/family-sharing";
+import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
 
@@ -36,6 +42,40 @@ const openai = new OpenAI({
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
+
+/** Cover + interior illustrations (BFL FLUX.2 Pro on Replicate). */
+const REPLICATE_FLUX_IMAGE_MODEL =
+  "black-forest-labs/flux-2-pro" as `${string}/${string}`;
+
+/**
+ * FLUX.2 Pro `resolution` (megapixels as a string, e.g. "4 MP"). Max 4 MP on Replicate.
+ * Optional env REPLICATE_FLUX_RESOLUTION — e.g. "2 MP" for lower cost (at 4:5, output may cap below requested MP).
+ */
+const REPLICATE_FLUX_IMAGE_RESOLUTION =
+  process.env.REPLICATE_FLUX_RESOLUTION?.trim() || "4 MP";
+
+/**
+ * FLUX.2 Pro safety_tolerance: 1 = strictest, 5 = most permissive.
+ * Legitimate children's book prompts are often false-flagged at 1–2; default 4 reduces E005 noise.
+ * Override with REPLICATE_FLUX_SAFETY_TOLERANCE (integer 1–5).
+ */
+function replicateFluxSafetyTolerance(): number {
+  const raw = process.env.REPLICATE_FLUX_SAFETY_TOLERANCE?.trim();
+  if (!raw) return 4;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return 4;
+  return Math.min(5, Math.max(1, n));
+}
+
+function replicateFluxProImageInput(prompt: string) {
+  return {
+    prompt,
+    output_format: "png" as const,
+    aspect_ratio: "4:5" as const,
+    resolution: REPLICATE_FLUX_IMAGE_RESOLUTION,
+    safety_tolerance: replicateFluxSafetyTolerance(),
+  };
+}
 
 /** Builds character description from optional parent-selected appearance. */
 function buildAppearancePrefix(
@@ -102,12 +142,14 @@ async function createCompletionWithRetry(
   }
 }
 
-/** In-memory rate limit: max 5 generate requests per user per minute. */
+/** In-memory rate limit: max generate requests per user per rolling minute (cap from tier priorityWeight). */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 5;
 
-function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number } {
+function checkRateLimit(
+  userId: string,
+  maxPerWindow: number
+): { ok: boolean; retryAfter?: number } {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
   if (!entry) {
@@ -118,7 +160,7 @@ function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number } {
     rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return { ok: true };
   }
-  if (entry.count >= RATE_LIMIT_MAX) {
+  if (entry.count >= maxPerWindow) {
     return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   }
   entry.count++;
@@ -135,7 +177,17 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id as string;
     const userEmail = session.user.email ?? null;
 
-    const rateLimit = checkRateLimit(userId);
+    const supabaseReady = Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    let familyPlan: FamilyPlanContext | null = null;
+    if (supabaseReady) {
+      await ensureUser(userId, userEmail);
+      familyPlan = await resolveFamilyPlanContext(userId);
+    }
+    const tierForRateLimit = familyPlan?.featureTier ?? "free";
+    const rateLimitMax = maxGenerateRequestsPerMinuteForTier(tierForRateLimit);
+    const rateLimit = checkRateLimit(userId, rateLimitMax);
     if (!rateLimit.ok) {
       return NextResponse.json(
         {
@@ -163,7 +215,8 @@ export async function POST(request: NextRequest) {
       appearance,
       preferredVoice,
       dedication,
-    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string } } & typeof body;
+      regenReason,
+    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string }; regenReason?: string } & typeof body;
 
     const validation = validateCreatePayload(body);
     if (!validation.ok) {
@@ -178,9 +231,23 @@ export async function POST(request: NextRequest) {
     }
 
     const isCorrection = Boolean(updateBookId);
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      await ensureUser(userId, userEmail);
+    if (supabaseReady && familyPlan) {
       const profile = await getUserProfile(userId);
+      const tier = familyPlan.featureTier;
+      const billingUserId = familyPlan.billingUserId;
+      const allowedArtStyles = getTierCapabilities(tier).allowedArtStyles;
+      if (
+        typeof artStyle === "string" &&
+        !allowedArtStyles.includes(artStyle as (typeof allowedArtStyles)[number])
+      ) {
+        return NextResponse.json(
+          {
+            error: "This art style is not included in your current plan.",
+            allowedArtStyles,
+          },
+          { status: 403 }
+        );
+      }
       if (!profile?.parentConsentAt) {
         return NextResponse.json(
           { error: "Parental consent required. Please complete the consent flow before creating books." },
@@ -188,8 +255,8 @@ export async function POST(request: NextRequest) {
         );
       }
       if (!isCorrection) {
-        const { limit, period } = await getBookLimitForUser(userId);
-        const count = await getUserBookCountByPeriod(userId, period);
+        const { limit, period } = await getBookLimitForUser(billingUserId);
+        const count = await getUserBookCountByPeriod(billingUserId, period);
         const effectiveLimit = count === 0 ? limit + 1 : limit;
         if (count >= effectiveLimit) {
           const periodMsg = period === "monthly" ? "this month" : "total";
@@ -199,6 +266,17 @@ export async function POST(request: NextRequest) {
           );
         }
       }
+    }
+
+    const lessonTier = familyPlan?.featureTier ?? "free";
+    const lessonAccess = getTierCapabilities(lessonTier).lessonPackAccess;
+    const rawLifeLesson =
+      typeof lifeLesson === "string" && lifeLesson.trim()
+        ? lifeLesson.trim()
+        : "kindness";
+    const lessonCheck = validateLifeLessonForAccess(rawLifeLesson, lessonAccess);
+    if (!lessonCheck.ok) {
+      return NextResponse.json({ error: lessonCheck.error }, { status: 403 });
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -220,6 +298,7 @@ export async function POST(request: NextRequest) {
       childName,
       Array.isArray(interests) ? interests.join(" ") : "",
       lifeLesson || "",
+      typeof regenReason === "string" ? regenReason : "",
       typeof appearance === "object" && appearance
         ? JSON.stringify(appearance)
         : "",
@@ -245,7 +324,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Generate story with GPT-4o
-    const userPrompt = getStoryUserPrompt({
+    const trimmedRegenReason =
+      typeof regenReason === "string" ? regenReason.trim().slice(0, 300) : "";
+    const baseUserPrompt = getStoryUserPrompt({
       childName,
       age: age || 5,
       pronouns: pronouns || "",
@@ -254,6 +335,9 @@ export async function POST(request: NextRequest) {
       artStyle: artStyle || "whimsical-watercolor",
       appearance,
     });
+    const userPrompt = trimmedRegenReason
+      ? `${baseUserPrompt}\n\nParent feedback for this regeneration (highest priority to address while keeping the story cozy and age-appropriate): ${trimmedRegenReason}`
+      : baseUserPrompt;
 
     const systemPrompt = STORY_SYSTEM_PROMPT
       .replace("[AGE]", String(age || 5))
@@ -366,8 +450,10 @@ export async function POST(request: NextRequest) {
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
+    // Positive-only phrasing: FLUX safety filters often false-flag prompts that mention
+    // nudity/underwear/bathing even as negations (E005).
     const imageSafetySuffix =
-      " G-rated wholesome children's picture book: every person fully and modestly clothed, no nudity or partial nudity, no underwear visible, no bathing or changing clothes, no romantic or sensual poses, family-safe imagery only.";
+      " Wholesome children's picture book illustration, G-rated family audience. Characters in normal modest everyday outfits; cheerful innocent scenes and poses suited to ages 3–8; bright friendly classic storybook mood.";
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
@@ -377,10 +463,9 @@ export async function POST(request: NextRequest) {
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
-        const output = await replicate.run(
-          "black-forest-labs/flux-2-dev" as `${string}/${string}`,
-          { input: { prompt: fullCoverPrompt, output_format: "png", aspect_ratio: "4:5" } }
-        );
+        const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
+          input: replicateFluxProImageInput(fullCoverPrompt),
+        });
         const result = Array.isArray(output) ? output[0] : output;
         if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
           coverImageUrl = (result as { url: () => string }).url();
@@ -416,10 +501,9 @@ export async function POST(request: NextRequest) {
       const fullPrompt = `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
-          const output = await replicate.run(
-            "black-forest-labs/flux-2-dev" as `${string}/${string}`,
-            { input: { prompt: fullPrompt, output_format: "png", aspect_ratio: "4:5" } }
-          );
+          const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
+            input: replicateFluxProImageInput(fullPrompt),
+          });
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
             imageUrls.push((result as { url: () => string }).url());
@@ -472,7 +556,10 @@ export async function POST(request: NextRequest) {
 
     if (hasSupabase) {
       try {
-        const { period } = await getBookLimitForUser(userId);
+        if (!familyPlan) familyPlan = await resolveFamilyPlanContext(userId);
+        const billingUserId = familyPlan.billingUserId;
+        const featureTier = familyPlan.featureTier;
+        const { period } = await getBookLimitForUser(billingUserId);
         const bookId = updateBookId ?? crypto.randomUUID();
         const storagePath = (name: string) => `books/${bookId}/${name}`;
 
@@ -520,8 +607,7 @@ export async function POST(request: NextRequest) {
           dedication: dedicationData ?? undefined,
         };
 
-        const profile = await getUserProfile(userId);
-        const subscriptionTierAtCreation = profile?.subscriptionTier ?? "free";
+        const subscriptionTierAtCreation = featureTier;
 
         if (updateBookId) {
           await replaceBook(bookId, userId, savedBook, creationMetadata);
@@ -535,7 +621,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        await insertBookUsageEvent(userId, bookId);
+        await insertBookUsageEvent(userId, bookId, billingUserId);
 
         book = { ...book, creationMetadata };
 
@@ -547,18 +633,16 @@ export async function POST(request: NextRequest) {
         if (wantsAiVoice) {
           console.log("[KiddoTales] Starting AI voice generation, preferredVoice:", preferredVoice);
           try {
-            const profile = await getUserProfile(userId);
-            const tier = profile?.subscriptionTier ?? "free";
-            if (tier === "free") {
+            if (featureTier === "free") {
               console.log("[KiddoTales] Skipping AI voice: user tier is free");
             } else {
-              const voiceLimit = getVoiceLimitForTier(tier);
-              const allowedVoices = getVoicesForTier(tier);
+              const voiceLimit = getVoiceLimitForTier(featureTier);
+              const allowedVoices = getVoicesForTier(featureTier);
               const voice = allowedVoices.includes(preferredVoice)
                 ? preferredVoice
                 : allowedVoices[0] ?? TTS_DEFAULT_VOICE;
-              const { period } = await getBookLimitForUser(userId);
-              const voiceCount = await getUserVoiceCountByPeriod(userId, period);
+              const { period } = await getBookLimitForUser(billingUserId);
+              const voiceCount = await getUserVoiceCountByPeriod(billingUserId, period);
               const alreadyUsed = await hasBookUsedVoiceSlot(bookId);
 
               if (!alreadyUsed && voiceCount >= voiceLimit) {
@@ -604,7 +688,7 @@ export async function POST(request: NextRequest) {
                   if (!updated) {
                     console.error("[KiddoTales] updateBookPagesWithAudio failed - audio files uploaded but DB not updated");
                   } else if (!alreadyUsed) {
-                    await insertVoiceUsageEvent(userId, bookId);
+                    await insertVoiceUsageEvent(userId, bookId, billingUserId);
                   }
                   // Always merge into response so client gets audio (files are in storage)
                   book = {

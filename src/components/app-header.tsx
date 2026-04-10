@@ -21,6 +21,8 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
   const [open, setOpen] = useState(false);
   const { data: session } = useSession();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [creditsLeft, setCreditsLeft] = useState<number | null>(null);
+  const [creditPeriod, setCreditPeriod] = useState<"monthly" | "total" | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -61,6 +63,45 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
     };
   }, [session?.user]);
 
+  useEffect(() => {
+    if (!session?.user) {
+      setCreditsLeft(null);
+      setCreditPeriod(null);
+      return;
+    }
+
+    let mounted = true;
+    const loadCredits = () => {
+      fetch("/api/user/settings")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!mounted || !data) return;
+          const limit = typeof data.bookLimit === "number" ? data.bookLimit : null;
+          const count = typeof data.bookCount === "number" ? data.bookCount : null;
+          const period = data.bookLimitPeriod === "monthly" ? "monthly" : "total";
+          if (limit == null || count == null) {
+            setCreditsLeft(null);
+            setCreditPeriod(null);
+            return;
+          }
+          setCreditsLeft(Math.max(0, limit - count));
+          setCreditPeriod(period);
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setCreditsLeft(null);
+          setCreditPeriod(null);
+        });
+    };
+
+    loadCredits();
+    const id = window.setInterval(loadCredits, 60000);
+    return () => {
+      mounted = false;
+      window.clearInterval(id);
+    };
+  }, [session?.user]);
+
   return (
     <>
       <header
@@ -80,6 +121,18 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
           <span className="text-xl font-bold text-foreground">KiddoTales</span>
         </Link>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2">
+          {session?.user && creditsLeft !== null && (
+            <span
+              className="inline-flex h-9 shrink-0 items-center rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary sm:text-sm"
+              title={
+                creditPeriod === "monthly"
+                  ? "Book credits left this month"
+                  : "Book credits left total"
+              }
+            >
+              {creditsLeft} credits left {creditPeriod === "monthly" ? "this month" : "total"}
+            </span>
+          )}
           {pageActions}
           <Button
             variant="ghost"
@@ -138,10 +191,16 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
                     Home
                   </Button>
                 </Link>
-                <Link href="/create" className="block w-full" onClick={() => setOpen(false)}>
+                <Link
+                  href={session?.user && creditsLeft === 0 ? "/pricing" : "/create"}
+                  className="block w-full"
+                  onClick={() => setOpen(false)}
+                >
                   <Button variant="ghost" className="w-full justify-start">
                     <BookOpen className="mr-2 size-4" />
-                    Create a book
+                    {session?.user && creditsLeft === 0
+                      ? "Upgrade to create more books"
+                      : "Create a book"}
                   </Button>
                 </Link>
                 {session?.user ? (

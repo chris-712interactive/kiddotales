@@ -24,6 +24,19 @@ export interface Dedication {
   from: string;
 }
 
+export interface PrintCoverTitleLayout {
+  /** Normalized [0..1] x offset inside front cover safe area. */
+  x: number;
+  /** Normalized [0..1] y offset inside front cover safe area. */
+  y: number;
+  /** Title box width as normalized [0.35..0.95] of front cover safe width. */
+  width: number;
+  /** Base font size in points for print cover title. */
+  fontSizePt: number;
+  /** Text alignment inside title box. */
+  align: "left" | "center" | "right";
+}
+
 export interface BookData {
   id?: string;
   title: string;
@@ -62,6 +75,8 @@ export interface CreateFormData {
   preferredVoice?: string;
   /** Optional dedication: message + from, shown after cover, before first story page. No illustration, no voice-over. */
   dedication?: Dedication;
+  /** Optional print-cover title layout override chosen by user. */
+  printCoverTitleLayout?: PrintCoverTitleLayout;
 }
 
 /** Stored with each book for correction flow */
@@ -134,6 +149,15 @@ export const LIFE_LESSONS = [
   "friendship",
   "gratitude",
   "honesty",
+] as const;
+
+/** Legend-only preset themes (lesson pack access: custom). */
+export const EXTENDED_LIFE_LESSONS = [
+  "curiosity",
+  "empathy",
+  "self-confidence",
+  "cooperation",
+  "respect-for-differences",
 ] as const;
 
 export const INTERESTS = [

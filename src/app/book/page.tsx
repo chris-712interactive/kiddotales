@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Volume2,
   Download,
+  Package,
   Plus,
   RectangleVertical,
   RectangleHorizontal,
@@ -24,6 +25,7 @@ import { CorrectionModal } from "@/components/correction-modal";
 import { AppHeader } from "@/components/app-header";
 import { useSession } from "next-auth/react";
 import { PENDING_BOOK_KEY, PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
+import type { CorrectionMode, LessonPackAccess } from "@/lib/entitlements";
 
 function BookViewerContent() {
   const searchParams = useSearchParams();
@@ -35,8 +37,14 @@ function BookViewerContent() {
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [showOrientationDialog, setShowOrientationDialog] = useState(false);
+  const [pdfVariant, setPdfVariant] = useState<"basic-standard" | "premium-storybook" | "premium-photo">("basic-standard");
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
+  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>("none");
+  const [pdfLevel, setPdfLevel] = useState<"basic" | "premium">("basic");
+  const [lessonPackAccess, setLessonPackAccess] =
+    useState<LessonPackAccess>("default");
+  const [printOrderingEnabled, setPrintOrderingEnabled] = useState(false);
   const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
   const { data: session } = useSession();
 
@@ -44,12 +52,37 @@ function BookViewerContent() {
     if (session?.user) {
       fetch("/api/user/settings")
         .then((r) => (r.ok ? r.json() : null))
-        .then((res) => res && setSubscriptionTier(res.subscriptionTier ?? "free"))
-        .catch(() => setSubscriptionTier("free"));
+        .then((res) => {
+          if (!res) return;
+          setSubscriptionTier(res.subscriptionTier ?? "free");
+          setCorrectionMode((res.correctionMode as CorrectionMode) ?? "none");
+          setPdfLevel((res.pdfLevel as "basic" | "premium") ?? "basic");
+          if (res.lessonPackAccess === "custom" || res.lessonPackAccess === "default") {
+            setLessonPackAccess(res.lessonPackAccess);
+          } else {
+            setLessonPackAccess("default");
+          }
+        })
+        .catch(() => {
+          setSubscriptionTier("free");
+          setCorrectionMode("none");
+          setPdfLevel("basic");
+          setLessonPackAccess("default");
+        });
     } else {
       setSubscriptionTier(null);
+      setCorrectionMode("none");
+      setPdfLevel("basic");
+      setLessonPackAccess("default");
     }
   }, [session?.user]);
+
+  useEffect(() => {
+    fetch("/api/print/config")
+      .then((r) => r.json())
+      .then((d) => setPrintOrderingEnabled(Boolean(d.enabled)))
+      .catch(() => setPrintOrderingEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (!deferredCorrectFromUrl || !book?.id || !session?.user) return;
@@ -352,7 +385,10 @@ function BookViewerContent() {
   }, [isPlayingAll]);
 
   const handleDownloadPDF = useCallback(
-    async (orientation: "portrait" | "landscape") => {
+    async (
+      orientation: "portrait" | "landscape",
+      variant: "basic-standard" | "premium-storybook" | "premium-photo"
+    ) => {
       if (!book) return;
       setShowOrientationDialog(false);
       setIsDownloading(true);
@@ -360,9 +396,14 @@ function BookViewerContent() {
         const res = await fetch("/api/generate-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ book, orientation }),
+          body: JSON.stringify({ book, orientation, pdfVariant: variant }),
         });
-        if (!res.ok) throw new Error("Failed to generate PDF");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            data?.error || "Failed to generate PDF"
+          );
+        }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -372,7 +413,7 @@ function BookViewerContent() {
         URL.revokeObjectURL(url);
         toast.success("PDF downloaded!");
       } catch (err) {
-        toast.error("Failed to generate PDF.");
+        toast.error(err instanceof Error ? err.message : "Failed to generate PDF.");
       } finally {
         setIsDownloading(false);
       }
@@ -438,6 +479,19 @@ function BookViewerContent() {
                   <span className="hidden sm:inline">Correct</span>
                 </Button>
               )
+            )}
+            {session?.user && book.id && printOrderingEnabled && (
+              <Link href={`/print/order?bookId=${encodeURIComponent(book.id)}`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="size-9 px-2 sm:size-auto sm:px-3"
+                  aria-label="Order printed copy"
+                >
+                  <Package className="size-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Print</span>
+                </Button>
+              </Link>
             )}
             <Button
               variant="outline"
@@ -607,13 +661,46 @@ function BookViewerContent() {
                 aria-labelledby="orientation-dialog-title"
               >
                 <h3 id="orientation-dialog-title" className="mb-4 text-center text-lg font-semibold text-foreground">
-                  Choose PDF orientation
+                  Choose PDF layout and orientation
                 </h3>
+                <div className="mb-4 space-y-2">
+                  <button
+                    type="button"
+                    className={`w-full rounded-xl border p-3 text-left ${pdfVariant === "basic-standard" ? "border-primary bg-primary/10" : "border-border"}`}
+                    onClick={() => setPdfVariant("basic-standard")}
+                  >
+                    <p className="font-medium text-foreground">Basic PDF</p>
+                    <p className="text-xs text-muted-foreground">Standard cover + story layout</p>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pdfLevel !== "premium"}
+                    className={`w-full rounded-xl border p-3 text-left ${pdfVariant === "premium-storybook" ? "border-primary bg-primary/10" : "border-border"} ${pdfLevel !== "premium" ? "cursor-not-allowed opacity-60" : ""}`}
+                    onClick={() => pdfLevel === "premium" && setPdfVariant("premium-storybook")}
+                  >
+                    <p className="font-medium text-foreground">Premium Storybook</p>
+                    <p className="text-xs text-muted-foreground">Enhanced title styling and readability</p>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pdfLevel !== "premium"}
+                    className={`w-full rounded-xl border p-3 text-left ${pdfVariant === "premium-photo" ? "border-primary bg-primary/10" : "border-border"} ${pdfLevel !== "premium" ? "cursor-not-allowed opacity-60" : ""}`}
+                    onClick={() => pdfLevel === "premium" && setPdfVariant("premium-photo")}
+                  >
+                    <p className="font-medium text-foreground">Premium Photo</p>
+                    <p className="text-xs text-muted-foreground">Cleaner overlay, image-forward style</p>
+                  </button>
+                  {pdfLevel !== "premium" && (
+                    <p className="text-xs text-muted-foreground">
+                      Upgrade to Magic or Legend to unlock premium PDF layouts.
+                    </p>
+                  )}
+                </div>
                 <div className="flex gap-4">
                   <Button
                     variant="outline"
                     className="flex flex-1 flex-col gap-2 py-6"
-                    onClick={() => handleDownloadPDF("portrait")}
+                    onClick={() => handleDownloadPDF("portrait", pdfVariant)}
                   >
                     <RectangleVertical className="size-10 text-primary" />
                     <span>Portrait</span>
@@ -621,7 +708,7 @@ function BookViewerContent() {
                   <Button
                     variant="outline"
                     className="flex flex-1 flex-col gap-2 py-6"
-                    onClick={() => handleDownloadPDF("landscape")}
+                    onClick={() => handleDownloadPDF("landscape", pdfVariant)}
                   >
                     <RectangleHorizontal className="size-10 text-primary" />
                     <span>Landscape</span>
@@ -648,6 +735,9 @@ function BookViewerContent() {
               pages: book.pages,
               creationMetadata: book.creationMetadata,
             }}
+            correctionMode={correctionMode}
+            lessonPackAccess={lessonPackAccess}
+            currentPageIndex={hasDedication ? Math.max(0, currentPage - 1) : currentPage}
             onClose={() => setShowCorrectionModal(false)}
             onSuccess={(updated) => {
               setBook({

@@ -35,6 +35,8 @@ export default function PricingContent() {
   const { data: session, status } = useSession();
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<string | null>(null);
+  /** Logged-in user benefits from someone else's plan (not the paying owner). */
+  const [familyShareMember, setFamilyShareMember] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const [priceIds, setPriceIds] = useState<{
     spark?: { monthly?: string; yearly?: string };
@@ -45,6 +47,7 @@ export default function PricingContent() {
     priceId: string;
     tierName: string;
     amountFormatted: string;
+    prorationWaived: boolean;
   } | null>(null);
   const [upgradeConfirmLoading, setUpgradeConfirmLoading] = useState(false);
   const [giftLoadingKey, setGiftLoadingKey] = useState<string | null>(null);
@@ -72,9 +75,11 @@ export default function PricingContent() {
         .then((r) => (r.ok ? r.json() : null))
         .then((res) => {
           setCurrentTier(res?.subscriptionTier ?? "free");
+          setFamilyShareMember(res?.familySharing?.role === "member");
         })
         .catch(() => {
           setCurrentTier("free");
+          setFamilyShareMember(false);
         })
         .finally(() => setSubscriptionLoading(false));
       const code = getAffiliateCode();
@@ -88,6 +93,7 @@ export default function PricingContent() {
       }
     } else {
       setCurrentTier(null);
+      setFamilyShareMember(false);
       setSubscriptionLoading(false);
     }
   }, [status]);
@@ -98,6 +104,12 @@ export default function PricingContent() {
       return;
     }
     if (subscriptionLoading) return;
+    if (familyShareMember) {
+      toast.error(
+        "Your access comes from a family plan. The subscriber manages upgrades and billing."
+      );
+      return;
+    }
     setLoadingPriceId(priceId);
     try {
       // Existing subscribers: upgrade shows modal, downgrade goes straight to change-plan
@@ -119,6 +131,7 @@ export default function PricingContent() {
             priceId,
             tierName: tierConfig?.name ?? tierId,
             amountFormatted: previewData.amountFormatted ?? "$0.00",
+            prorationWaived: Boolean(previewData.prorationWaived),
           });
           return;
         }
@@ -270,6 +283,13 @@ export default function PricingContent() {
           <p className="mt-2 text-muted-foreground">
             Unlock more stories and features for your little ones
           </p>
+          {familyShareMember && (
+            <p className="mx-auto mt-4 max-w-xl rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+              You&apos;re signed in with shared access from a family Legend plan. Subscribe and
+              plan-change options are hidden here; the person who pays manages billing. You can
+              still gift a membership to someone else below.
+            </p>
+          )}
         </motion.div>
 
         {giftMode && (
@@ -381,46 +401,50 @@ export default function PricingContent() {
                   </ul>
                   {status === "authenticated" && hasPrices ? (
                     <div className="mt-6 space-y-2">
-                      <Button
-                        className="w-full"
-                        disabled={
-                          subscriptionLoading ||
-                          !!loadingPriceId ||
-                          currentTier === tier.id
-                        }
-                        onClick={() =>
-                          handleSubscribe(priceIdMonthly || priceIdYearly!, tier.id)
-                        }
-                      >
-                        {loadingPriceId === (priceIdMonthly || priceIdYearly) ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : subscriptionLoading ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          "Subscribe monthly"
-                        )}
-                      </Button>
-                      {priceIdYearly && (
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          disabled={
-                            subscriptionLoading ||
-                            !!loadingPriceId ||
-                            currentTier === tier.id
-                          }
-                          onClick={() => handleSubscribe(priceIdYearly, tier.id)}
-                        >
-                          {loadingPriceId === priceIdYearly ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : subscriptionLoading ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            "Subscribe yearly"
+                      {!familyShareMember && (
+                        <>
+                          <Button
+                            className="w-full"
+                            disabled={
+                              subscriptionLoading ||
+                              !!loadingPriceId ||
+                              currentTier === tier.id
+                            }
+                            onClick={() =>
+                              handleSubscribe(priceIdMonthly || priceIdYearly!, tier.id)
+                            }
+                          >
+                            {loadingPriceId === (priceIdMonthly || priceIdYearly) ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : subscriptionLoading ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              "Subscribe monthly"
+                            )}
+                          </Button>
+                          {priceIdYearly && (
+                            <Button
+                              variant="outline"
+                              className="w-full"
+                              disabled={
+                                subscriptionLoading ||
+                                !!loadingPriceId ||
+                                currentTier === tier.id
+                              }
+                              onClick={() => handleSubscribe(priceIdYearly, tier.id)}
+                            >
+                              {loadingPriceId === priceIdYearly ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : subscriptionLoading ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                "Subscribe yearly"
+                              )}
+                            </Button>
                           )}
-                        </Button>
+                        </>
                       )}
-                      <div className="pt-2">
+                      <div className={familyShareMember ? "" : "pt-2"}>
                         <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
                           Gift to someone else
                         </p>
@@ -440,16 +464,24 @@ export default function PricingContent() {
                       </div>
                     </div>
                   ) : status === "authenticated" ? (
-                    <Button
-                      className="mt-6 w-full"
-                      variant="outline"
-                      disabled={subscriptionLoading || currentTier === tier.id}
-                      onClick={() =>
-                        toast.error("Stripe prices not configured. Add price IDs to .env")
-                      }
-                    >
-                      Subscribe (configure Stripe)
-                    </Button>
+                    familyShareMember ? (
+                      <div className="mt-6">
+                        <p className="text-center text-sm text-muted-foreground">
+                          Plan changes are managed by the family subscriber.
+                        </p>
+                      </div>
+                    ) : (
+                      <Button
+                        className="mt-6 w-full"
+                        variant="outline"
+                        disabled={subscriptionLoading || currentTier === tier.id}
+                        onClick={() =>
+                          toast.error("Stripe prices not configured. Add price IDs to .env")
+                        }
+                      >
+                        Subscribe (configure Stripe)
+                      </Button>
+                    )
                   ) : (
                     <div className="mt-6 space-y-2">
                       <Link href="/sign-in?callbackUrl=/pricing" className="block">
@@ -483,6 +515,7 @@ export default function PricingContent() {
             onClose={() => setUpgradeModal(null)}
             tierName={upgradeModal.tierName}
             amountFormatted={upgradeModal.amountFormatted}
+            prorationWaived={upgradeModal.prorationWaived}
             onConfirm={handleUpgradeConfirm}
             isLoading={upgradeConfirmLoading}
           />

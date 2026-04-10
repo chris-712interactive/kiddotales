@@ -9,6 +9,8 @@ type Props = {
   onClose: () => void;
   tierName: string;
   amountFormatted: string;
+  /** When true, proration is waived (small charge); no immediate payment. */
+  prorationWaived?: boolean;
   onConfirm: () => Promise<void>;
   isLoading?: boolean;
 };
@@ -18,6 +20,7 @@ export function UpgradeConfirmModal({
   onClose,
   tierName,
   amountFormatted,
+  prorationWaived = false,
   onConfirm,
   isLoading = false,
 }: Props) {
@@ -63,17 +66,32 @@ export function UpgradeConfirmModal({
             </div>
 
             <p className="mb-4 text-muted-foreground">
-              You&apos;ll be charged a prorated amount for the remainder of your
-              current billing period.
+              {prorationWaived ? (
+                <>
+                  Your upgrade takes effect right away. Because the prorated
+                  amount would be small, we won&apos;t charge you today — you keep
+                  the same renewal date, and your next bill reflects the new plan.
+                </>
+              ) : (
+                <>
+                  You&apos;ll be charged a prorated amount for the remainder of
+                  your current billing period. Your renewal date stays the same.
+                </>
+              )}
             </p>
 
             <div className="mb-6 rounded-xl border-2 border-border bg-muted/50 px-4 py-3">
               <p className="text-sm text-muted-foreground">
-                Charge today
+                {prorationWaived ? "Due now" : "Charge today"}
               </p>
               <p className="text-2xl font-bold text-foreground">
                 {amountFormatted}
               </p>
+              {prorationWaived && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No payment is collected for this upgrade right now.
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3">

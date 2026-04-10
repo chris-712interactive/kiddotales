@@ -23,7 +23,7 @@ export default function TermsPage() {
         <article className="prose prose-neutral dark:prose-invert max-w-none">
           <h1 className="text-3xl font-bold text-foreground">Terms of Service</h1>
           <p className="text-sm text-muted-foreground">
-            Last updated: March 2025
+            Last updated: April 2026
           </p>
 
           <section className="mt-6 space-y-4">
@@ -57,7 +57,8 @@ export default function TermsPage() {
               <li>Use the Service for any illegal purpose or in violation of any laws</li>
               <li>Submit false, misleading, or inappropriate content</li>
               <li>Attempt to circumvent usage limits, security measures, or access controls</li>
-              <li>Resell, redistribute, or commercially exploit the Service without permission</li>
+              <li>Commercialize the KiddoTales platform itself (for example reselling access, white-labeling, or scraping the Service) without our written permission</li>
+              <li>Use storybooks, illustrations, or other output generated through the Service for commercial purposes when your subscription tier does not allow commercial use (see Intellectual Property below)</li>
               <li>Use the Service to harm minors or collect information from children without parental consent</li>
             </ul>
             <p className="text-muted-foreground mt-4">
@@ -68,14 +69,30 @@ export default function TermsPage() {
           <section className="mt-6 space-y-4">
             <h2 className="text-xl font-semibold text-foreground">5. Subscriptions and Payments</h2>
             <p className="text-muted-foreground">
-              Paid subscriptions (Spark, Magic, Legend) are billed monthly or annually through Stripe. By subscribing, you authorize recurring charges. You may cancel at any time from your account settings; cancellation takes effect at the end of the current billing period. Refunds are handled per our refund policy and applicable law. We may change pricing with reasonable notice; continued use after a price change constitutes acceptance.
+              Paid subscriptions (Spark, Magic, Legend) are billed monthly or annually through Stripe. By subscribing, you authorize recurring charges. You may cancel at any time from your account settings; cancellation takes effect at the end of the current billing period. Refunds are handled per our refund policy and applicable law. We may change pricing with reasonable notice; continued use after a price change constitutes acceptance. Which activities you may perform with downloaded or exported books—including whether commercial use is permitted—depends on your active plan as described in the Intellectual Property section.
             </p>
           </section>
 
           <section className="mt-6 space-y-4">
-            <h2 className="text-xl font-semibold text-foreground">6. Intellectual Property</h2>
+            <h2 className="text-xl font-semibold text-foreground">6. Intellectual Property and use of generated content</h2>
             <p className="text-muted-foreground">
-              You retain ownership of the personal information you provide. Generated story content and illustrations are created for your personal, non-commercial use. KiddoTales and its branding, technology, and underlying systems remain our property. Commercial use of generated content may require a separate agreement.
+              You retain ownership of the personal information you provide about your child and family. Stories, illustrations, audio, and other materials produced by the Service for your account (&quot;Output&quot;) are provided for your use subject to this section and your subscription tier. KiddoTales and its branding, software, models, prompts, and underlying systems remain our property.
+            </p>
+            <h3 className="text-lg font-semibold text-foreground">6.1 Personal and commercial use by plan</h3>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Free, Spark, and Magic.</strong> Output is licensed for your <strong className="text-foreground">personal, non-commercial</strong> use only. That includes reading and sharing with family and friends in a private, non-commercial context. You may not sell, license for a fee, use in paid advertising, or otherwise exploit Output for commercial purposes unless you upgrade to a plan that expressly allows commercial use. PDFs or other exports may include a notice reminding you of this restriction.
+            </p>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Legend.</strong> If you have an active Legend subscription (or equivalent access we designate), Output is licensed for both <strong className="text-foreground">personal and commercial</strong> use. Examples include selling printed copies you produce, using illustrations in your own small business materials, or offering books you created as part of a permitted service—always subject to these Terms, our Acceptable Use rules, and your responsibility for any third-party rights (for example likeness, trademarks, or other people&apos;s content you asked us to incorporate).
+            </p>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Family sharing.</strong> If you access the Service through a household Legend plan as an invited family member, your rights to Output you create follow the <strong className="text-foreground">subscriber&apos;s</strong> plan (Legend commercial terms apply to your generated books while that sharing remains active). The paying subscriber remains responsible for the subscription and billing.
+            </p>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">After downgrade or cancellation.</strong> If you move from Legend to a tier that does not include commercial use, you must stop new commercial exploitation of Output created after the change under the prior tier; we do not grant retroactive commercial rights for books you create on a non-commercial plan. Reasonable ongoing personal use of books you already made generally remains acceptable.
+            </p>
+            <p className="text-muted-foreground">
+              Nothing in this section allows you to misrepresent KiddoTales as endorsing your product, to remove required legal notices we place on exports where applicable, or to use the Service or our trademarks in a way that suggests you operate or own KiddoTales.
             </p>
           </section>
 

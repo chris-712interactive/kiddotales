@@ -1,4 +1,10 @@
 import Stripe from "stripe";
+import {
+  getTierCapabilities,
+  TTS_DEFAULT_VOICE,
+  TTS_VOICES_MAGIC,
+  TTS_VOICES_LEGEND,
+} from "./entitlements";
 
 export type BookLimitPeriod = "total" | "monthly";
 
@@ -88,17 +94,22 @@ export function getStripeGiftPriceIds(): {
 }
 
 /** Subscription tiers and their limits/features */
+const FREE_CAPS = getTierCapabilities("free");
+const SPARK_CAPS = getTierCapabilities("spark");
+const MAGIC_CAPS = getTierCapabilities("magic");
+const LEGEND_CAPS = getTierCapabilities("legend");
+
 export const SUBSCRIPTION_TIERS = {
   free: {
     id: "free",
     name: "Free",
-    bookLimit: 3,
-    bookLimitPeriod: "total" as BookLimitPeriod,
-    voiceLimit: 0,
+    bookLimit: FREE_CAPS.bookLimit,
+    bookLimitPeriod: FREE_CAPS.bookLimitPeriod as BookLimitPeriod,
+    voiceLimit: FREE_CAPS.voiceLimit,
     priceMonthly: null,
     priceYearly: null,
     features: [
-      "Up to 3 books total",
+      `Up to ${FREE_CAPS.bookLimit} book generations total`,
       "Basic generation",
       "Limited art styles",
     ],
@@ -106,13 +117,13 @@ export const SUBSCRIPTION_TIERS = {
   spark: {
     id: "spark",
     name: "Spark",
-    bookLimit: 12,
-    bookLimitPeriod: "monthly" as BookLimitPeriod,
-    voiceLimit: 5,
-    priceMonthly: 5.99,
-    priceYearly: 59,
+    bookLimit: SPARK_CAPS.bookLimit,
+    bookLimitPeriod: SPARK_CAPS.bookLimitPeriod as BookLimitPeriod,
+    voiceLimit: SPARK_CAPS.voiceLimit,
+    priceMonthly: 6.99,
+    priceYearly: 69,
     features: [
-      "Up to 12 books/month",
+      `Up to ${SPARK_CAPS.bookLimit} book generations/month`,
       "No watermark",
       "Full art styles",
       "Save last 10 books",
@@ -126,13 +137,13 @@ export const SUBSCRIPTION_TIERS = {
   magic: {
     id: "magic",
     name: "Magic",
-    bookLimit: 35,
-    bookLimitPeriod: "monthly" as BookLimitPeriod,
-    voiceLimit: 10,
-    priceMonthly: 9.99,
-    priceYearly: 99,
+    bookLimit: MAGIC_CAPS.bookLimit,
+    bookLimitPeriod: MAGIC_CAPS.bookLimitPeriod as BookLimitPeriod,
+    voiceLimit: MAGIC_CAPS.voiceLimit,
+    priceMonthly: 11.99,
+    priceYearly: 119,
     features: [
-      "Up to 35 books/month",
+      `Up to ${MAGIC_CAPS.bookLimit} book generations/month`,
       "Everything in Spark",
       "Priority generation",
       "Voice input",
@@ -147,13 +158,13 @@ export const SUBSCRIPTION_TIERS = {
   legend: {
     id: "legend",
     name: "Legend",
-    bookLimit: 75,
-    bookLimitPeriod: "monthly" as BookLimitPeriod,
-    voiceLimit: 15,
+    bookLimit: LEGEND_CAPS.bookLimit,
+    bookLimitPeriod: LEGEND_CAPS.bookLimitPeriod as BookLimitPeriod,
+    voiceLimit: LEGEND_CAPS.voiceLimit,
     priceMonthly: 16.99,
     priceYearly: 169,
     features: [
-      "Up to 75 books/month",
+      `Up to ${LEGEND_CAPS.bookLimit} book generations/month`,
       "Everything in Magic",
       "Multi-child profiles (up to 5 kids)",
       "Family sharing (invite 2 others)",
@@ -174,11 +185,10 @@ export function getBookLimitForTier(tier: string): {
   limit: number;
   period: BookLimitPeriod;
 } {
-  const t = SUBSCRIPTION_TIERS[tier as SubscriptionTierId];
-  const config = t ?? SUBSCRIPTION_TIERS.free;
+  const config = getTierCapabilities(tier);
   return {
     limit: config.bookLimit,
-    period: (config as { bookLimitPeriod?: BookLimitPeriod }).bookLimitPeriod ?? "total",
+    period: config.bookLimitPeriod,
   };
 }
 
@@ -226,22 +236,8 @@ export function getStripe(): Stripe | null {
 
 /** AI voice limits by tier (books with AI voice per month) */
 export function getVoiceLimitForTier(tier: string): number {
-  const t = SUBSCRIPTION_TIERS[tier as SubscriptionTierId];
-  const config = t ?? SUBSCRIPTION_TIERS.free;
-  return (config as { voiceLimit?: number }).voiceLimit ?? 0;
+  return getTierCapabilities(tier).voiceLimit;
 }
-
-/** Default TTS voice (Spark's single voice) */
-export const TTS_DEFAULT_VOICE = "nova";
-
-/** Magic tier: 3 voice options */
-export const TTS_VOICES_MAGIC = ["nova", "alloy", "shimmer"] as const;
-
-/** Legend tier: all OpenAI TTS voices (tts-1 supports 9 voices only) */
-export const TTS_VOICES_LEGEND = [
-  "alloy", "ash", "coral", "echo", "fable",
-  "nova", "onyx", "sage", "shimmer",
-] as const;
 
 /** Human-readable labels for voice selector */
 export const TTS_VOICE_LABELS: Record<string, string> = {
@@ -258,8 +254,7 @@ export const TTS_VOICE_LABELS: Record<string, string> = {
 
 /** Get allowed voices for a tier */
 export function getVoicesForTier(tier: string): string[] {
-  if (tier === "legend") return [...TTS_VOICES_LEGEND];
-  if (tier === "magic") return [...TTS_VOICES_MAGIC];
-  if (tier === "spark") return [TTS_DEFAULT_VOICE];
-  return [];
+  return [...getTierCapabilities(tier).allowedVoices];
 }
+
+export { TTS_DEFAULT_VOICE, TTS_VOICES_MAGIC, TTS_VOICES_LEGEND };

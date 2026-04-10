@@ -15,9 +15,9 @@ This document describes how KiddoTales handles subscription lifecycle with Strip
 - Our webhook handles `customer.subscription.deleted` when the subscription actually ends.
 
 ### 3. Upgrade with Proration
-- When a user upgrades (e.g. Spark → Magic), the change is **immediate**.
-- Stripe prorates: the customer gets credit for unused time on the old plan and is charged the difference for the new plan.
-- Implemented via `stripe.subscriptions.update()` with `proration_behavior: 'create_prorations'`.
+- When a user upgrades (e.g. Spark → Magic), the change is **immediate** and the **billing period end date does not change** (same subscription, new price on the item).
+- Stripe normally prorates: credit for unused time on the old plan and charge for the new plan. We use `subscriptionItems.update` with `proration_behavior: 'always_invoice'` so that amount is collected right away when it is meaningful.
+- **Small proration waiver**: If the previewed invoice `amount_due` is **below** `UPGRADE_PRORATION_WAIVER_THRESHOLD_CENTS` (default **100** = under **$1.00** in USD cents), we upgrade with `proration_behavior: 'none'` instead: **no charge today**, new plan applies immediately, **renewal date unchanged**; the next regular invoice uses the new price. Set the env var to **0** to disable waiving and always invoice proration.
 
 ### 4. Downgrade at Next Billing Cycle
 - When a user downgrades (e.g. Magic → Spark), the change is **scheduled** for the end of the current billing period.
@@ -42,5 +42,6 @@ This document describes how KiddoTales handles subscription lifecycle with Strip
 ## API Endpoints
 
 - **POST /api/stripe/checkout** – New subscriptions only (rejects if user already has one).
-- **POST /api/stripe/change-plan** – Upgrade (immediate + proration) or downgrade (scheduled at period end).
+- **POST /api/stripe/change-plan** – Upgrade (immediate; proration invoiced or waived per threshold) or downgrade (scheduled at period end).
+- **POST /api/stripe/preview-upgrade** – Preview charge today; includes `prorationWaived` when under threshold.
 - **POST /api/stripe/portal** – Opens Stripe Customer Portal for managing payment methods and cancellation.

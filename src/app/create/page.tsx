@@ -41,6 +41,7 @@ import {
   GENDERS,
   INTERESTS,
   LIFE_LESSONS,
+  EXTENDED_LIFE_LESSONS,
   HAIR_COLORS,
   HAIR_STYLES,
   SKIN_TONES,
@@ -50,6 +51,10 @@ import {
 } from "@/types";
 import { ParentalConsentModal } from "@/components/parental-consent-modal";
 import { TTS_VOICE_LABELS } from "@/lib/stripe";
+import type { ArtStyleId, LessonPackAccess } from "@/lib/entitlements";
+import {
+  isPresetLifeLessonSlug,
+} from "@/lib/life-lesson-access";
 
 const ART_STYLE_CARDS = [
   {
@@ -88,6 +93,8 @@ const ART_STYLE_CARDS = [
     image: undefined,
   },
 ];
+
+const ALL_ART_STYLE_IDS = ART_STYLE_CARDS.map((s) => s.id) as ArtStyleId[];
 
 const CREATE_FLOW_STEPS: { num: number; label: string; icon: LucideIcon }[] = [
   { num: 1, label: "Start", icon: CheckCircle2 },
@@ -206,6 +213,7 @@ function CreatePageContent() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const [profiles, setProfiles] = useState<ChildProfile[]>([]);
+  const [maxChildProfiles, setMaxChildProfiles] = useState<number | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
   const [parentGuardianConfirmed, setParentGuardianConfirmed] = useState(false);
@@ -223,7 +231,10 @@ function CreatePageContent() {
   });
 
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
+  const [lessonPackAccess, setLessonPackAccess] =
+    useState<LessonPackAccess>("default");
   const [voiceOptions, setVoiceOptions] = useState<string[]>([]);
+  const [allowedArtStyles, setAllowedArtStyles] = useState<ArtStyleId[]>(ALL_ART_STYLE_IDS);
   const [playingSample, setPlayingSample] = useState<string | null>(null);
   const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -376,7 +387,26 @@ function CreatePageContent() {
     if (status !== "authenticated") return;
     fetch("/api/child-profiles")
       .then((r) => r.json())
-      .then((data) => setProfiles(Array.isArray(data) ? data : []))
+      .then((data: unknown) => {
+        if (
+          data &&
+          typeof data === "object" &&
+          Array.isArray((data as { profiles?: unknown }).profiles)
+        ) {
+          const d = data as {
+            profiles: ChildProfile[];
+            maxChildProfiles?: number;
+          };
+          setProfiles(d.profiles);
+          if (typeof d.maxChildProfiles === "number") {
+            setMaxChildProfiles(d.maxChildProfiles);
+          }
+        } else if (Array.isArray(data)) {
+          setProfiles(data);
+        } else {
+          setProfiles([]);
+        }
+      })
       .catch(() => setProfiles([]));
   }, [status]);
 
@@ -449,16 +479,53 @@ function CreatePageContent() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data?.subscriptionTier) setSubscriptionTier(data.subscriptionTier);
+          if (data?.lessonPackAccess === "custom" || data?.lessonPackAccess === "default") {
+            setLessonPackAccess(data.lessonPackAccess);
+          } else {
+            setLessonPackAccess("default");
+          }
           if (Array.isArray(data?.voiceOptions)) setVoiceOptions(data.voiceOptions);
+          if (Array.isArray(data?.allowedArtStyles) && data.allowedArtStyles.length > 0) {
+            setAllowedArtStyles(
+              data.allowedArtStyles.filter((id: unknown): id is ArtStyleId =>
+                ALL_ART_STYLE_IDS.includes(id as ArtStyleId)
+              )
+            );
+          } else {
+            setAllowedArtStyles(ALL_ART_STYLE_IDS);
+          }
           setSettingsFetched(true);
         })
         .catch(() => setSettingsFetched(true));
     } else {
       setSubscriptionTier("free");
+      setLessonPackAccess("default");
       setVoiceOptions([]);
+      setAllowedArtStyles(ALL_ART_STYLE_IDS);
       setSettingsFetched(true);
     }
   }, [status]);
+
+  useEffect(() => {
+    if (!settingsFetched) return;
+    if (lessonPackAccess !== "default") return;
+    setForm((prev) => {
+      if (
+        prev.lifeLesson === "custom" ||
+        !isPresetLifeLessonSlug(prev.lifeLesson, "default")
+      ) {
+        return { ...prev, lifeLesson: "kindness" };
+      }
+      return prev;
+    });
+    setCustomLifeLesson("");
+  }, [lessonPackAccess, settingsFetched]);
+
+  useEffect(() => {
+    if (allowedArtStyles.includes(form.artStyle as ArtStyleId)) return;
+    const fallback = allowedArtStyles[0] ?? "whimsical-watercolor";
+    setForm((prev) => ({ ...prev, artStyle: fallback }));
+  }, [allowedArtStyles, form.artStyle]);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) {
@@ -542,6 +609,13 @@ function CreatePageContent() {
       return;
     }
 
+    if (outOfCredits) {
+      toast.error("You're out of credits. Upgrade your plan to create more books.");
+      isSubmittingRef.current = false;
+      router.push("/pricing");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
@@ -593,6 +667,11 @@ function CreatePageContent() {
 
   const resolvedPronouns = form.pronouns === "custom" ? customPronoun : form.pronouns;
   const resolvedLifeLesson = form.lifeLesson === "custom" ? customLifeLesson : form.lifeLesson;
+  const unavailableArtStyleCount = ART_STYLE_CARDS.filter(
+    (style) => !allowedArtStyles.includes(style.id as ArtStyleId)
+  ).length;
+  const creditsRemaining = bookCount ? Math.max(0, bookCount.limit - bookCount.count) : null;
+  const outOfCredits = creditsRemaining !== null && creditsRemaining <= 0;
 
   if (isLoading) return <LoadingScreen showSteps hasAiVoice={!!(form.preferredVoice && form.preferredVoice !== "none")} />;
 
@@ -1132,6 +1211,23 @@ function CreatePageContent() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lifeLesson">Life lesson</Label>
+                      {lessonPackAccess === "custom" ? (
+                        <p className="text-sm text-muted-foreground">
+                          Legend includes extra themes and a custom lesson line — write your own in
+                          a few words.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Choose one of our standard themes.{" "}
+                          <Link
+                            href="/pricing"
+                            className="font-medium text-primary underline hover:no-underline"
+                          >
+                            Legend
+                          </Link>{" "}
+                          adds more packs and custom wording.
+                        </p>
+                      )}
                       <Select
                         id="lifeLesson"
                         value={form.lifeLesson}
@@ -1144,9 +1240,17 @@ function CreatePageContent() {
                             {l.replace(/-/g, " ")}
                           </option>
                         ))}
-                        <option value="custom">Custom</option>
+                        {lessonPackAccess === "custom" &&
+                          EXTENDED_LIFE_LESSONS.map((l) => (
+                            <option key={l} value={l}>
+                              {l.replace(/-/g, " ")}
+                            </option>
+                          ))}
+                        {lessonPackAccess === "custom" && (
+                          <option value="custom">Custom (your words)</option>
+                        )}
                       </Select>
-                      {form.lifeLesson === "custom" && (
+                      {lessonPackAccess === "custom" && form.lifeLesson === "custom" && (
                         <Input
                           placeholder="e.g. being patient"
                           value={customLifeLesson}
@@ -1170,6 +1274,22 @@ function CreatePageContent() {
                     <p className="text-center text-base leading-relaxed text-muted-foreground sm:mb-4">
                       Choose the art style for your story&apos;s illustrations.
                     </p>
+                    {unavailableArtStyleCount > 0 && (
+                        <div className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+                          <p className="text-sm text-muted-foreground">
+                            {status === "authenticated" ? (
+                              <>
+                                <Link href="/pricing" className="font-medium text-primary underline hover:no-underline">
+                                  Upgrade your plan
+                                </Link>
+                                {" "}to unlock all illustration styles.
+                              </>
+                            ) : (
+                              "Sign in and upgrade your plan to unlock all illustration styles."
+                            )}
+                          </p>
+                        </div>
+                    )}
                     <div className="space-y-3">
                       <Label>Art style</Label>
                       <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
@@ -1183,13 +1303,16 @@ function CreatePageContent() {
                             <Card
                               className={cn(
                                 "cursor-pointer transition-all active:ring-2 active:ring-primary/40",
+                                !allowedArtStyles.includes(style.id as ArtStyleId) &&
+                                  "cursor-not-allowed opacity-60 hover:border-border",
                                 form.artStyle === style.id
                                   ? "ring-2 ring-primary"
                                   : "hover:border-primary/50"
                               )}
-                              onClick={() =>
-                                setForm((prev) => ({ ...prev, artStyle: style.id }))
-                              }
+                              onClick={() => {
+                                if (!allowedArtStyles.includes(style.id as ArtStyleId)) return;
+                                setForm((prev) => ({ ...prev, artStyle: style.id }));
+                              }}
                             >
                               <div className="h-36 overflow-hidden rounded-t-xl sm:h-40">
                                 {style.image ? (
@@ -1208,8 +1331,13 @@ function CreatePageContent() {
                                 )}
                               </div>
                               <CardHeader className="py-3">
-                                <CardTitle className="text-base">
+                                <CardTitle className="text-base flex items-center gap-2">
                                   {style.label}
+                                  {!allowedArtStyles.includes(style.id as ArtStyleId) && (
+                                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                      Locked
+                                    </span>
+                                  )}
                                 </CardTitle>
                                 <p className="text-xs text-muted-foreground">
                                   {style.description}
@@ -1338,41 +1466,78 @@ function CreatePageContent() {
 
                     {/* Save as profile */}
                     {form.childName.trim() && form.interests.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="min-h-11 w-full touch-manipulation"
-                        onClick={async () => {
-                          try {
-                            const pronouns =
-                              form.pronouns === "custom" ? customPronoun : form.pronouns;
-                            const lifeLesson =
-                              form.lifeLesson === "custom"
-                                ? customLifeLesson
-                                : form.lifeLesson;
-                            const res = await fetch("/api/child-profiles", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                name: form.childName.trim(),
-                                age: form.age,
-                                pronouns: pronouns || "they/them",
-                                interests: form.interests,
-                                appearance: form.appearance ?? {},
-                              }),
-                            });
-                            if (!res.ok) throw new Error("Failed to save");
-                            const profile = await res.json();
-                            setProfiles((prev) => [profile, ...prev]);
-                            setSelectedProfileId(profile.id);
-                            toast.success(`Saved "${profile.name}" as a profile.`);
-                          } catch {
-                            toast.error("Could not save profile.");
+                      <div className="space-y-2">
+                        {maxChildProfiles != null &&
+                          profiles.length >= maxChildProfiles && (
+                            <p className="text-center text-sm text-muted-foreground">
+                              You&apos;re using all {maxChildProfiles} profile
+                              slot{maxChildProfiles === 1 ? "" : "s"} on your plan.{" "}
+                              <Link
+                                href="/pricing"
+                                className="font-medium text-primary underline hover:no-underline"
+                              >
+                                Upgrade
+                              </Link>{" "}
+                              to save more, or manage profiles in{" "}
+                              <Link
+                                href="/settings/profiles"
+                                className="font-medium text-primary underline hover:no-underline"
+                              >
+                                settings
+                              </Link>
+                              .
+                            </p>
+                          )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="min-h-11 w-full touch-manipulation"
+                          disabled={
+                            maxChildProfiles != null &&
+                            profiles.length >= maxChildProfiles
                           }
-                        }}
-                    >
-                      Save as profile for next time
-                    </Button>
+                          onClick={async () => {
+                            try {
+                              const pronouns =
+                                form.pronouns === "custom"
+                                  ? customPronoun
+                                  : form.pronouns;
+                              const res = await fetch("/api/child-profiles", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  name: form.childName.trim(),
+                                  age: form.age,
+                                  pronouns: pronouns || "they/them",
+                                  interests: form.interests,
+                                  appearance: form.appearance ?? {},
+                                }),
+                              });
+                              const body = (await res
+                                .json()
+                                .catch(() => ({}))) as Record<string, unknown>;
+                              if (!res.ok) {
+                                toast.error(
+                                  typeof body.error === "string"
+                                    ? body.error
+                                    : "Could not save profile."
+                                );
+                                return;
+                              }
+                              const profile = body as unknown as ChildProfile;
+                              setProfiles((prev) => [profile, ...prev]);
+                              setSelectedProfileId(profile.id);
+                              toast.success(
+                                `Saved "${profile.name}" as a profile.`
+                              );
+                            } catch {
+                              toast.error("Could not save profile.");
+                            }
+                          }}
+                        >
+                          Save as profile for next time
+                        </Button>
+                      </div>
                     )}
                   </motion.div>
                 )}
@@ -1408,6 +1573,16 @@ function CreatePageContent() {
                   Next
                   <ChevronRight className="ml-1 size-4" />
                 </Button>
+              ) : outOfCredits ? (
+                <Link href="/pricing" className="min-w-0 flex-1 sm:flex-none">
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="min-h-12 w-full min-w-0 touch-manipulation sm:min-h-14 sm:min-w-[220px]"
+                  >
+                    Upgrade Plan to Create More Books
+                  </Button>
+                </Link>
               ) : (
                 <Button
                   type="submit"

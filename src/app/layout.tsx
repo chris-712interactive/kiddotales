@@ -88,7 +88,12 @@ export default function RootLayout({
               Skip to main content
             </a>
             <div className="flex h-screen flex-col overflow-hidden">
-              <main id="main" className="flex min-h-0 flex-1 flex-col">{children}</main>
+              <main
+              id="main"
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
+            >
+              {children}
+            </main>
               <Footer />
             </div>
           <Toaster

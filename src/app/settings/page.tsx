@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield, MessageSquare } from "lucide-react";
+import { ArrowLeft, User, Phone, BookOpen, Sparkles, ExternalLink, Loader2, Shield, MessageSquare, Package, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import {
 import { AppHeader } from "@/components/app-header";
 import { FeedbackTrigger } from "@/components/feedback-trigger";
 import { getBookLimitForTier } from "@/lib/stripe";
+import { getTierCapabilities } from "@/lib/entitlements";
 import { toast } from "sonner";
 import ManageBooksPanel from "@/components/settings/manage-books-panel";
 
@@ -38,6 +39,17 @@ type SettingsData = {
   bookLimit: number;
   bookLimitPeriod?: "total" | "monthly";
   subscriptionTier: string;
+  lessonPackAccess?: "default" | "custom";
+  commercialUse?: boolean;
+  accountSubscriptionTier?: string;
+  familySharing?: {
+    role: "owner" | "member" | null;
+    seatsTotal: number;
+    seatsUsed: number;
+    members: { memberUserId: string; email: string | null }[];
+    pendingInvites: { id: string; invitedEmail: string; expiresAt: string }[];
+    ownerEmail?: string | null;
+  };
   theme?: "light" | "dark";
 };
 
@@ -75,9 +87,24 @@ type SettingsSectionId =
   | "contact"
   | "subscription"
   | "books"
+  | "printOrders"
   | "gifts"
   | "childData"
   | "feedback";
+
+type UserPrintOrder = {
+  id: string;
+  bookId: string;
+  printBookStyleId?: string | null;
+  status: string;
+  retailAmountCents: number;
+  currency: string;
+  luluPrintJobId: string | null;
+  luluJobStatus: string | null;
+  trackingUrls?: unknown;
+  createdAt: string;
+  errorMessage: string | null;
+};
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -99,6 +126,7 @@ function SettingsContent() {
   const [myGifts, setMyGifts] = useState<GiftMembership[]>([]);
   const [resendingGiftId, setResendingGiftId] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<SettingsSectionId>("profile");
+  const [printOrders, setPrintOrders] = useState<UserPrintOrder[]>([]);
 
   useEffect(() => {
     const checkout = searchParams.get("checkout");
@@ -193,6 +221,11 @@ function SettingsContent() {
     fetch("/api/gifts/my")
       .then((r) => (r.ok ? r.json() : { gifts: [] }))
       .then((res) => setMyGifts((res.gifts as GiftMembership[]) ?? []))
+      .catch(() => {});
+
+    fetch("/api/print/orders")
+      .then((r) => (r.ok ? r.json() : { orders: [] }))
+      .then((res) => setPrintOrders((res.orders as UserPrintOrder[]) ?? []))
       .catch(() => {});
   }, []);
 
@@ -427,6 +460,12 @@ function SettingsContent() {
       disabled: !profile.parentConsentAt,
     },
     {
+      id: "printOrders",
+      label: "Print orders",
+      icon: Package,
+      description: "Track physical book orders",
+    },
+    {
       id: "gifts",
       label: "Gifts",
       icon: Sparkles,
@@ -447,6 +486,38 @@ function SettingsContent() {
   ];
 
   const activeSection = sections.find((section) => section.id === selectedSection) ?? sections[0];
+  const formatMoney = (cents: number, currency: string) =>
+    new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: (currency || "USD").toUpperCase(),
+    }).format((cents || 0) / 100);
+
+  const statusLabel = (status: string, luluJobStatus: string | null) => {
+    switch (status) {
+      case "awaiting_payment":
+        return "Awaiting payment";
+      case "paid":
+        return "Paid";
+      case "building_files":
+        return "Preparing print files";
+      case "submitted_to_lulu":
+        return luluJobStatus ? `Submitted (${luluJobStatus})` : "Submitted to printer";
+      case "lulu_unpaid":
+        return "Awaiting printer charge";
+      case "lulu_in_production":
+        return luluJobStatus ? `In production (${luluJobStatus})` : "In production";
+      case "shipped":
+        return "Shipped";
+      case "delivered":
+        return "Delivered";
+      case "failed":
+        return "Needs attention";
+      case "cancelled":
+        return "Cancelled";
+      default:
+        return status;
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
@@ -670,6 +741,38 @@ function SettingsContent() {
                         </Link>
                       )}
                     </div>
+                    {data.commercialUse && (
+                      <div className="rounded-xl border-2 border-border bg-muted/30 px-4 py-3">
+                        <p className="text-sm font-medium text-foreground">
+                          Commercial use (Legend)
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Your plan allows personal and commercial use of stories you create (for
+                          example selling printed copies or using illustrations in your own
+                          business), subject to our Terms of Service. Downloaded PDFs for
+                          non-Legend plans include a personal, non-commercial notice.
+                        </p>
+                      </div>
+                    )}
+                    {(getTierCapabilities(subscriptionTier).sharingSeats > 0 ||
+                      data.familySharing?.role === "member") && (
+                      <div className="rounded-xl border-2 border-border bg-muted/30 px-4 py-3">
+                        <p className="text-sm font-medium text-foreground">
+                          Family sharing
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {data.familySharing?.role === "member"
+                            ? `You're on a shared Legend plan (${data.familySharing.ownerEmail ?? "subscriber"}).`
+                            : "Invite up to two other adults to share your Legend benefits and story limits."}
+                        </p>
+                        <Link href="/settings/family" className="mt-2 inline-block">
+                          <Button size="sm" variant="secondary">
+                            <Users className="mr-1 size-4" />
+                            Manage family sharing
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -695,6 +798,89 @@ function SettingsContent() {
                     </CardContent>
                   </Card>
                 ))}
+
+              {selectedSection === "printOrders" && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="size-5" />
+                      Print orders
+                    </CardTitle>
+                    <CardDescription>
+                      Track physical books ordered through Lulu.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {printOrders.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        You have no print orders yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {printOrders.map((order) => {
+                          const trackingUrlsRaw = order.trackingUrls as
+                            | { trackingUrls?: string[] }
+                            | null
+                            | undefined;
+                          const trackingUrls = Array.isArray(trackingUrlsRaw?.trackingUrls)
+                            ? trackingUrlsRaw.trackingUrls
+                            : [];
+
+                          return (
+                            <div
+                              key={order.id}
+                              className="rounded-xl border border-border bg-background p-3"
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold">
+                                    {statusLabel(order.status, order.luluJobStatus)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Ordered {new Date(order.createdAt).toLocaleString()}
+                                  </p>
+                                </div>
+                                <p className="text-sm font-medium">
+                                  {formatMoney(order.retailAmountCents, order.currency)}
+                                </p>
+                              </div>
+
+                              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                <p>Order ID: {order.id}</p>
+                                {order.luluPrintJobId ? (
+                                  <p>Lulu Job: {order.luluPrintJobId}</p>
+                                ) : null}
+                                {order.errorMessage ? (
+                                  <p className="text-amber-700 dark:text-amber-400">
+                                    Note: {order.errorMessage}
+                                  </p>
+                                ) : null}
+                              </div>
+
+                              {trackingUrls.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {trackingUrls.map((url, idx) => (
+                                    <a
+                                      key={`${order.id}-track-${idx}`}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-muted"
+                                    >
+                                      Track package {idx + 1}
+                                      <ExternalLink className="ml-1 size-3" />
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {selectedSection === "gifts" && (
                 <Card>

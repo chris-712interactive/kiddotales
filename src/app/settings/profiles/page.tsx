@@ -31,12 +31,34 @@ export default function ChildProfilesPage() {
     null
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [maxChildProfiles, setMaxChildProfiles] = useState<number | null>(null);
 
   const fetchProfiles = () => {
     fetch("/api/child-profiles")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => setProfiles(Array.isArray(data) ? data : []))
-      .catch(() => setProfiles([]))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) {
+          setProfiles([]);
+          setMaxChildProfiles(null);
+          return;
+        }
+        if (Array.isArray(data.profiles)) {
+          setProfiles(data.profiles);
+          setMaxChildProfiles(
+            typeof data.maxChildProfiles === "number" ? data.maxChildProfiles : null
+          );
+        } else if (Array.isArray(data)) {
+          setProfiles(data);
+          setMaxChildProfiles(null);
+        } else {
+          setProfiles([]);
+          setMaxChildProfiles(null);
+        }
+      })
+      .catch(() => {
+        setProfiles([]);
+        setMaxChildProfiles(null);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -53,8 +75,19 @@ export default function ChildProfilesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create");
-      const profile = await res.json();
+      const body = (await res.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!res.ok) {
+        const msg =
+          typeof body.error === "string"
+            ? body.error
+            : "Failed to create profile.";
+        toast.error(msg);
+        throw new Error("Failed to create");
+      }
+      const profile = body as unknown as ChildProfile;
       setProfiles((prev) => [profile, ...prev]);
       toast.success(`Created profile for ${profile.name}`);
     } else {
@@ -90,6 +123,9 @@ export default function ChildProfilesPage() {
       setDeletingId(null);
     }
   };
+
+  const atProfileLimit =
+    maxChildProfiles != null && profiles.length >= maxChildProfiles;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-background dark:to-[var(--pastel-mint)]">
@@ -127,10 +163,30 @@ export default function ChildProfilesPage() {
               <CardDescription>
                 Create a child profile to save time when making books. You can
                 select a profile on the create page to prefill the form.
+                {maxChildProfiles != null && (
+                  <span className="mt-1 block text-foreground/80">
+                    {profiles.length} of {maxChildProfiles} profiles used on your
+                    plan.
+                  </span>
+                )}
+                {atProfileLimit && (
+                  <span className="mt-2 block">
+                    <Link
+                      href="/pricing"
+                      className="font-medium text-primary underline hover:no-underline"
+                    >
+                      Upgrade your plan
+                    </Link>{" "}
+                    to save more child profiles.
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => setModalProfile("new")}>
+              <Button
+                onClick={() => setModalProfile("new")}
+                disabled={atProfileLimit}
+              >
                 <UserPlus className="mr-2 size-4" />
                 Add child profile
               </Button>
@@ -152,6 +208,7 @@ export default function ChildProfilesPage() {
                 <Button
                   className="mt-4"
                   onClick={() => setModalProfile("new")}
+                  disabled={atProfileLimit}
                 >
                   Add your first profile
                 </Button>

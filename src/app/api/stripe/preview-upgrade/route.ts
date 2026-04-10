@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getStripe, getTierFromPriceId, getTierRank } from "@/lib/stripe";
 import { getUserProfile } from "@/lib/db";
+import { shouldWaiveUpgradeProration } from "@/lib/stripe-upgrade-proration";
 
 /**
  * Preview the prorated charge for upgrading to a new plan.
@@ -103,15 +104,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const amountDue = preview.amount_due ?? 0;
-    const currency = (preview.currency ?? "usd").toUpperCase();
+    const invoiceAmountCents = preview.amount_due ?? 0;
+    const currencyCode = preview.currency ?? "usd";
+    const currency = currencyCode.toUpperCase();
+    const prorationWaived = shouldWaiveUpgradeProration(invoiceAmountCents);
+    const chargeTodayCents = prorationWaived ? 0 : invoiceAmountCents;
 
     return NextResponse.json({
-      amountCents: amountDue,
+      amountCents: chargeTodayCents,
+      invoicePreviewCents: invoiceAmountCents,
+      prorationWaived,
       amountFormatted: new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: preview.currency ?? "usd",
-      }).format(amountDue / 100),
+        currency: currencyCode,
+      }).format(chargeTodayCents / 100),
       currency,
       tier: newTier,
     });

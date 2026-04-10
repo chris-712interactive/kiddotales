@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx src/lib/entitlements.test.ts",
     "generate-voice-samples": "tsx scripts/generate-voice-samples.ts"
   },
   "dependencies": {

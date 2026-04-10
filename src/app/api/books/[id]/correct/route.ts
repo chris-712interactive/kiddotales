@@ -7,7 +7,7 @@ import {
   getBookLimitForUser,
   getUserBookCountByPeriod,
 } from "@/lib/db";
-import { ART_STYLE_PROMPTS } from "@/lib/constants";
+import { getArtStylePrompt } from "@/lib/art-style-catalog";
 import { uploadImageToStorage } from "@/lib/supabase-storage";
 import Replicate from "replicate";
 import { getTierCapabilities } from "@/lib/entitlements";
@@ -194,7 +194,7 @@ export async function POST(
 
     const target = book.pages[pageIndex];
     const effectiveArtStyle = corrected.artStyle || "whimsical-watercolor";
-    const styleSuffix = ART_STYLE_PROMPTS[effectiveArtStyle] ?? "";
+    const styleSuffix = getArtStylePrompt(effectiveArtStyle);
     const characterPrefix = buildAppearancePrefix(
       corrected.childName,
       corrected.age,

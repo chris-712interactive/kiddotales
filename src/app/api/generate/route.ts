@@ -3,8 +3,8 @@ import OpenAI, { RateLimitError } from "openai";
 import Replicate from "replicate";
 import {
   getStoryUserPrompt,
-  ART_STYLE_PROMPTS,
 } from "@/lib/constants";
+import { getArtStylePrompt } from "@/lib/art-style-catalog";
 import type { BookData, BookPage, CharacterAppearance } from "@/types";
 import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { auth } from "@/auth";
@@ -411,7 +411,7 @@ export async function POST(request: NextRequest) {
       throw new Error("Invalid story structure from OpenAI");
     }
 
-    const styleSuffix = ART_STYLE_PROMPTS[artStyle] || ART_STYLE_PROMPTS["whimsical-watercolor"];
+    const styleSuffix = getArtStylePrompt(artStyle);
     const isPhotoRealistic = artStyle === "photo-realistic";
 
     // Character consistency: prepend same description to every image prompt

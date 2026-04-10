@@ -3,7 +3,7 @@
  */
 import { ART_STYLE_IDS } from "@/lib/art-style-catalog";
 
-const VALID_ART_STYLES = new Set(ART_STYLE_IDS);
+const VALID_ART_STYLES = new Set<string>(ART_STYLE_IDS as readonly string[]);
 
 export type ValidationResult = { ok: true } | { ok: false; error: string };
 

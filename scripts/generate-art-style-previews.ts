@@ -81,8 +81,7 @@ async function main() {
 
   // Some local Node setups don't expose TransformStream globally.
   if (!("TransformStream" in globalThis)) {
-    (globalThis as typeof globalThis & { TransformStream: typeof TransformStream }).TransformStream =
-      TransformStream;
+    (globalThis as { TransformStream?: unknown }).TransformStream = TransformStream;
   }
   const { default: Replicate } = await import("replicate");
   const replicate = new Replicate({ auth: token });

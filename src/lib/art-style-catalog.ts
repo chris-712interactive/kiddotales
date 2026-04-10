@@ -171,3 +171,12 @@ export const ART_STYLE_PROMPTS: Record<ArtStyleId, string> = Object.fromEntries(
   ART_STYLE_CATALOG.map((s) => [s.id, s.promptDescriptor])
 ) as Record<ArtStyleId, string>;
 
+export function isArtStyleId(value: string): value is ArtStyleId {
+  return (ART_STYLE_IDS as readonly string[]).includes(value);
+}
+
+export function getArtStylePrompt(styleId: string | null | undefined): string {
+  if (styleId && isArtStyleId(styleId)) return ART_STYLE_PROMPTS[styleId];
+  return ART_STYLE_PROMPTS["whimsical-watercolor"];
+}
+

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getTierCapabilities } from "./entitlements";
+import { getTierCapabilities, maxGenerateRequestsPerMinuteForTier } from "./entitlements";
 
 function testEntitlementsSnapshotByTier() {
   const free = getTierCapabilities("free");
@@ -85,7 +85,16 @@ function testCapabilityProgressionMonotonic() {
   assert.ok(magic.maxChildProfiles <= legend.maxChildProfiles);
 }
 
+function testGenerateRateLimitScalesWithPriorityWeight() {
+  assert.equal(maxGenerateRequestsPerMinuteForTier("free"), 3);
+  assert.equal(maxGenerateRequestsPerMinuteForTier("spark"), 5);
+  assert.equal(maxGenerateRequestsPerMinuteForTier("magic"), 7);
+  assert.equal(maxGenerateRequestsPerMinuteForTier("legend"), 9);
+  assert.equal(maxGenerateRequestsPerMinuteForTier("unknown-tier"), 3);
+}
+
 testEntitlementsSnapshotByTier();
 testUnknownTierNormalizesToFree();
 testCapabilityProgressionMonotonic();
+testGenerateRateLimitScalesWithPriorityWeight();
 console.log("entitlements tests passed");

@@ -161,3 +161,12 @@ function baselineCapabilities(tier: TierId): TierCapabilities {
 export function getTierCapabilities(tier: string): TierCapabilities {
   return baselineCapabilities(normalizeTier(tier));
 }
+
+/**
+ * Rolling per-minute cap for POST /api/generate (server in-memory limiter).
+ * Scales with {@link TierCapabilities.priorityWeight} so paid tiers can burst more safely under load.
+ */
+export function maxGenerateRequestsPerMinuteForTier(tier: string): number {
+  const w = getTierCapabilities(tier).priorityWeight;
+  return 3 + w * 2;
+}

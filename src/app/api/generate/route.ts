@@ -26,7 +26,7 @@ import {
   getVoicesForTier,
   TTS_DEFAULT_VOICE,
 } from "@/lib/stripe";
-import { getTierCapabilities } from "@/lib/entitlements";
+import { getTierCapabilities, maxGenerateRequestsPerMinuteForTier } from "@/lib/entitlements";
 import {
   resolveFamilyPlanContext,
   type FamilyPlanContext,
@@ -142,12 +142,14 @@ async function createCompletionWithRetry(
   }
 }
 
-/** In-memory rate limit: max 5 generate requests per user per minute. */
+/** In-memory rate limit: max generate requests per user per rolling minute (cap from tier priorityWeight). */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 5;
 
-function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number } {
+function checkRateLimit(
+  userId: string,
+  maxPerWindow: number
+): { ok: boolean; retryAfter?: number } {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
   if (!entry) {
@@ -158,7 +160,7 @@ function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number } {
     rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return { ok: true };
   }
-  if (entry.count >= RATE_LIMIT_MAX) {
+  if (entry.count >= maxPerWindow) {
     return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   }
   entry.count++;
@@ -175,7 +177,17 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id as string;
     const userEmail = session.user.email ?? null;
 
-    const rateLimit = checkRateLimit(userId);
+    const supabaseReady = Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    let familyPlan: FamilyPlanContext | null = null;
+    if (supabaseReady) {
+      await ensureUser(userId, userEmail);
+      familyPlan = await resolveFamilyPlanContext(userId);
+    }
+    const tierForRateLimit = familyPlan?.featureTier ?? "free";
+    const rateLimitMax = maxGenerateRequestsPerMinuteForTier(tierForRateLimit);
+    const rateLimit = checkRateLimit(userId, rateLimitMax);
     if (!rateLimit.ok) {
       return NextResponse.json(
         {
@@ -219,10 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isCorrection = Boolean(updateBookId);
-    let familyPlan: FamilyPlanContext | null = null;
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      await ensureUser(userId, userEmail);
-      familyPlan = await resolveFamilyPlanContext(userId);
+    if (supabaseReady && familyPlan) {
       const profile = await getUserProfile(userId);
       const tier = familyPlan.featureTier;
       const billingUserId = familyPlan.billingUserId;

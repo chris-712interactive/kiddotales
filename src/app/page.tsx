@@ -67,7 +67,7 @@ function DashboardView({
     <div className="space-y-8">
       {/* Welcome + Create CTA */}
       <motion.section
-        className="flex flex-col items-center rounded-2xl border-2 border-border bg-card p-8 shadow-lg md:flex-row md:justify-between md:gap-6"
+        className="flex flex-col items-center rounded-2xl border-2 border-border bg-card p-6 shadow-lg sm:p-8 md:flex-row md:justify-between md:gap-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -80,9 +80,15 @@ function DashboardView({
             Ready to create another bedtime story?
           </p>
         </div>
-        <Link href={outOfCredits ? "/pricing" : "/create"} className="shrink-0">
-          <Button size="lg" className="text-lg">
-            <BookOpen className="mr-2 size-5" />
+        <Link
+          href={outOfCredits ? "/pricing" : "/create"}
+          className="w-full shrink-0 sm:w-auto"
+        >
+          <Button
+            size="lg"
+            className="w-full text-balance text-base leading-snug sm:w-auto sm:text-lg"
+          >
+            <BookOpen className="mr-2 size-5 shrink-0" />
             {outOfCredits ? "Upgrade Plan to Create More Books" : "Create a book"}
           </Button>
         </Link>
@@ -133,7 +139,7 @@ function DashboardView({
 
       {/* Stats cards */}
       <motion.section
-        className="grid gap-4 sm:grid-cols-3"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
@@ -396,7 +402,7 @@ export default function LandingPage() {
       <main
         className={`mx-auto ${
           showDashboard ? "max-w-4xl" : "max-w-6xl"
-        } w-full min-h-0 flex-1 overflow-y-auto px-4 pb-16 pt-8 md:px-8`}
+        } w-full min-h-0 flex-1 overflow-y-auto pb-16 pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-8 md:pl-8 md:pr-8`}
       >
         {showDashboard ? (
           <>

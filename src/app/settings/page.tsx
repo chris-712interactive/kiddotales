@@ -427,6 +427,7 @@ function SettingsContent() {
   }
 
   const { profile, bookCount, bookLimit, subscriptionTier } = data;
+  const isFamilyShareMember = data.familySharing?.role === "member";
   const sections: {
     id: SettingsSectionId;
     label: string;
@@ -712,13 +713,13 @@ function SettingsContent() {
                             title="If you just subscribed, click to sync your plan"
                             aria-label="Sync subscription plan"
                           >
-                            {syncLoading ? (
+                            { syncLoading ? (
                               <Loader2 className="mr-1 size-4 animate-spin" />
-                            ) : null}
+                            ) : null }
                             Just subscribed? Sync plan
                           </Button>
                         </>
-                      ) : (
+                      ) : !isFamilyShareMember ? (
                         <Button
                           size="sm"
                           variant="outline"
@@ -732,8 +733,8 @@ function SettingsContent() {
                           )}
                           Manage subscription
                         </Button>
-                      )}
-                      {subscriptionTier !== "free" && (
+                      ) : null}
+                      {subscriptionTier !== "free" && !isFamilyShareMember && (
                         <Link href="/pricing">
                           <Button size="sm" variant="ghost">
                             Change plan

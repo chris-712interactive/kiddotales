@@ -102,7 +102,8 @@ export default function ManageBooksPanel({ variant = "page" }: ManageBooksPanelP
           resolvedBooks = extractBooks(fallback);
         }
         setBooks(resolvedBooks);
-        setSubscriptionTier(settings?.profile?.subscriptionTier ?? "free");
+        // Use effective feature tier (includes family-sharing benefits), not account billing tier.
+        setSubscriptionTier(settings?.subscriptionTier ?? "free");
       })
       .catch(() => setBooks([]))
       .finally(() => setLoading(false));
@@ -264,11 +265,12 @@ export default function ManageBooksPanel({ variant = "page" }: ManageBooksPanelP
                       disabled={deletingId === book.id}
                       onClick={() => handleDeleteBook(book.id)}
                       aria-label={`Delete ${book.title}`}
+                      className="deleteButton"
                     >
                       {deletingId === book.id ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : (
-                        <Trash2 className="size-4" />
+                        <Trash2 className="size-4 trashcanIcon" />
                       )}
                     </Button>
                   </div>
@@ -289,11 +291,12 @@ export default function ManageBooksPanel({ variant = "page" }: ManageBooksPanelP
                 variant="destructive"
                 disabled={deleteAllLoading || books.length === 0}
                 onClick={handleDeleteAll}
+                className="deleteButton"
               >
                 {deleteAllLoading ? (
                   <Loader2 className="mr-2 size-4 animate-spin" />
                 ) : (
-                  <Trash2 className="mr-2 size-4" />
+                  <Trash2 className="mr-2 size-4 trashcanIcon" />
                 )}
                 Delete all {books.length} book{books.length !== 1 ? "s" : ""}
               </Button>

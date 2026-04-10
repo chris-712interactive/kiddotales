@@ -88,7 +88,7 @@ export function ProfileFormModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:items-center sm:p-4 sm:pb-4"
         onClick={onClose}
       >
         <motion.div
@@ -96,7 +96,7 @@ export function ProfileFormModal({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+          className="max-h-[min(92dvh,calc(100vh-1.5rem))] w-full max-w-lg overflow-y-auto overscroll-y-contain rounded-2xl border-2 border-border bg-card p-4 shadow-xl sm:max-h-[90dvh] sm:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby="profile-modal-title"

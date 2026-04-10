@@ -106,7 +106,7 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
     <>
       <header
         className={cn(
-          "flex items-center justify-between gap-3 px-4 py-4 md:px-8",
+          "flex items-center justify-between gap-2 py-4 pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] md:gap-3 md:pl-8 md:pr-8",
           className
         )}
       >
@@ -118,19 +118,27 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
             height={32}
             className="size-8 object-contain"
           />
-          <span className="text-xl font-bold text-foreground">KiddoTales</span>
+          <span className="hidden truncate text-lg font-bold text-foreground sm:inline sm:text-xl">
+            KiddoTales
+          </span>
         </Link>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2">
           {session?.user && creditsLeft !== null && (
             <span
-              className="inline-flex h-9 shrink-0 items-center rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary sm:text-sm"
+              className="inline-flex h-9 max-w-[40vw] shrink items-center truncate rounded-full border border-primary/30 bg-primary/10 px-2.5 text-xs font-semibold text-primary sm:max-w-none sm:px-3 sm:text-sm"
               title={
                 creditPeriod === "monthly"
                   ? "Book credits left this month"
                   : "Book credits left total"
               }
             >
-              {creditsLeft} credits left {creditPeriod === "monthly" ? "this month" : "total"}
+              <span className="truncate sm:hidden">
+                {creditsLeft} left
+              </span>
+              <span className="hidden sm:inline">
+                {creditsLeft} credits left{" "}
+                {creditPeriod === "monthly" ? "this month" : "total"}
+              </span>
             </span>
           )}
           {pageActions}

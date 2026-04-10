@@ -47,6 +47,16 @@ function BookViewerContent() {
   const [printOrderingEnabled, setPrintOrderingEnabled] = useState(false);
   const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
   const { data: session } = useSession();
+  /** Avoid drag-to-turn on narrow viewports; match SSR as false to prevent hydration mismatch. */
+  const [narrowViewport, setNarrowViewport] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setNarrowViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     if (session?.user) {
@@ -452,7 +462,6 @@ function BookViewerContent() {
   const totalPages = hasDedication ? 1 + book.pages.length : book.pages.length;
   const isDedicationPage = hasDedication && currentPage === 0;
   const page = isDedicationPage ? null : book.pages[hasDedication ? currentPage - 1 : currentPage];
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--pastel-pink)] via-background to-[var(--pastel-mint)]">
@@ -518,7 +527,7 @@ function BookViewerContent() {
         }
       />
 
-      <main className="mx-auto max-w-4xl px-4 pb-16">
+      <main className="mx-auto max-w-4xl pb-16 pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
         <h1 className="mb-6 text-center text-2xl font-bold text-foreground">
           {book.title}
         </h1>
@@ -527,7 +536,7 @@ function BookViewerContent() {
         <motion.div
           className="relative"
           initial={false}
-          drag={isMobile ? false : "x"}
+          drag={narrowViewport ? false : "x"}
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.2}
           onDragEnd={(_, info) => {
@@ -539,31 +548,31 @@ function BookViewerContent() {
             }
           }}
         >
-          <div className="flex items-center justify-center gap-4">
+          <div className="mx-auto grid w-full max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-4">
             <Button
               variant="outline"
               size="icon"
-              className="size-12 rounded-full"
+              className="size-10 shrink-0 rounded-full sm:size-12"
               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
               disabled={currentPage === 0}
               aria-label="Previous page"
             >
-              <ChevronLeft className="size-6" />
+              <ChevronLeft className="size-5 sm:size-6" />
             </Button>
 
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentPage}
-                className="flex flex-col items-center"
+                className="flex min-w-0 flex-col items-center"
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.3 }}
               >
                 {isDedicationPage && book.dedication ? (
-                  <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10 md:w-[500px]">
-                    <div className="flex min-h-[300px] flex-col items-center justify-center p-8 md:min-h-[400px]">
-                      <p className="text-center text-xl leading-relaxed text-foreground">
+                  <div className="w-full max-w-[500px] overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10">
+                    <div className="flex min-h-[260px] flex-col items-center justify-center p-6 sm:min-h-[300px] sm:p-8 md:min-h-[400px]">
+                      <p className="text-center text-lg leading-relaxed text-foreground sm:text-xl">
                         {book.dedication.message}
                       </p>
                       {book.dedication.from && (
@@ -575,7 +584,7 @@ function BookViewerContent() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10">
+                    <div className="w-full max-w-[500px] overflow-hidden rounded-2xl border-2 border-border bg-card shadow-xl shadow-black/10">
                       {(page?.imageData || page?.imageUrl) ? (
                         <img
                           src={page?.imageData || page?.imageUrl}
@@ -583,12 +592,12 @@ function BookViewerContent() {
                           className="w-full object-cover book-page-image"
                         />
                       ) : (
-                        <div className="flex h-[300px] w-full items-center justify-center bg-muted md:h-[400px] md:w-[500px]">
+                        <div className="flex h-[240px] w-full max-w-[500px] items-center justify-center bg-muted sm:h-[300px] md:h-[400px]">
                           <BookOpen className="size-16 text-muted-foreground" />
                         </div>
                       )}
-                      <div className="p-6">
-                        <p className="text-center text-lg leading-relaxed text-foreground">
+                      <div className="p-4 sm:p-6">
+                        <p className="text-center text-base leading-relaxed text-foreground sm:text-lg">
                           {page?.text}
                         </p>
                       </div>
@@ -628,14 +637,14 @@ function BookViewerContent() {
             <Button
               variant="outline"
               size="icon"
-              className="size-12 rounded-full"
+              className="size-10 shrink-0 rounded-full sm:size-12"
               onClick={() =>
                 setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
               }
               disabled={currentPage === totalPages - 1}
               aria-label="Next page"
             >
-              <ChevronRight className="size-6" />
+              <ChevronRight className="size-5 sm:size-6" />
             </Button>
           </div>
         </motion.div>
@@ -647,7 +656,7 @@ function BookViewerContent() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:items-center sm:p-4 sm:pb-4"
               onClick={() => setShowOrientationDialog(false)}
             >
               <motion.div
@@ -655,7 +664,7 @@ function BookViewerContent() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-2xl border-2 border-border bg-card p-6 shadow-xl"
+                className="max-h-[min(92dvh,calc(100vh-1.5rem))] w-full max-w-lg overflow-y-auto overscroll-y-contain rounded-2xl border-2 border-border bg-card p-4 shadow-xl sm:max-h-[90dvh] sm:p-6"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="orientation-dialog-title"

@@ -2,6 +2,8 @@
  * KiddoTales prompts and constants
  * Story generation uses STORY_SYSTEM_PROMPT from @/lib/prompts (this duplicate is legacy / unused by the API).
  */
+import { ART_STYLE_BY_ID, ART_STYLE_PROMPTS, type ArtStyleId } from "@/lib/art-style-catalog";
+export { ART_STYLE_PROMPTS };
 
 export const STORY_SYSTEM_PROMPT = `You are a magical children's story writer. Create personalized bedtime stories that are warm, gentle, and perfect for young children.
 
@@ -39,13 +41,11 @@ export const getStoryUserPrompt = (params: {
   artStyle: string;
   appearance?: { hairColor?: string; hairStyle?: string; skinTone?: string; eyeColor?: string; glasses?: boolean; freckles?: boolean };
 }) => {
-  const artStyleDescriptions: Record<string, string> = {
-    "whimsical-watercolor": "soft watercolor illustrations with dreamy, flowing colors",
-    "pixar-3d": "Pixar-style 3D CGI, vibrant and expressive",
-    "hand-drawn-classic": "classic hand-drawn storybook style like vintage children's books",
-    "vibrant-cartoon": "bright, bold cartoon style with clean lines",
-    "photo-realistic": "photorealistic illustrations with natural lighting and lifelike detail",
-  };
+  const styleSpec = ART_STYLE_BY_ID[
+    (params.artStyle as ArtStyleId) in ART_STYLE_BY_ID
+      ? (params.artStyle as ArtStyleId)
+      : "whimsical-watercolor"
+  ];
 
   const appearanceParts: string[] = [];
   if (params.appearance?.hairColor) appearanceParts.push(`${params.appearance.hairColor} hair`);
@@ -70,24 +70,11 @@ export const getStoryUserPrompt = (params: {
 - Pronouns: ${params.pronouns}
 - Interests: ${params.interests.join(", ")}
 - Life lesson to teach: ${params.lifeLesson}
-- Art style for images: ${artStyleDescriptions[params.artStyle] || params.artStyle}${appearanceLine}${photoRealisticHint}
+- Art style for images: ${styleSpec.label} — ${styleSpec.description}. Rendering direction: ${styleSpec.promptDescriptor}${appearanceLine}${photoRealisticHint}
 
 Generate the complete story as JSON. Remember: exactly 8 pages, each with text and a detailed imagePrompt.
 
 Content must stay innocent for ages 3-10: no adult, romantic, or sexual themes; no gender-transition or sexuality topics; illustration prompts must show everyone fully modestly clothed (no nudity, bathing, or undressing scenes).`;
-};
-
-export const ART_STYLE_PROMPTS: Record<string, string> = {
-  "whimsical-watercolor":
-    "Children's book illustration, soft watercolor style, dreamy pastel colors, gentle brushstrokes, whimsical and magical atmosphere",
-  "pixar-3d":
-    "Children's book illustration, Pixar-style 3D CGI, vibrant colors, expressive characters, cinematic lighting, heartwarming",
-  "hand-drawn-classic":
-    "Children's book illustration, classic hand-drawn style, vintage storybook aesthetic, warm colors, detailed linework",
-  "vibrant-cartoon":
-    "Children's book illustration, bright bold cartoon style, clean lines, saturated colors, fun and playful",
-  "photo-realistic":
-    "Photorealistic children's book illustration, professional photography style, soft natural lighting, warm and inviting, lifelike detail, realistic skin and hair texture, natural character proportions, cinematic quality, high resolution",
 };
 
 export const BOOK_HISTORY_KEY = "kiddotales-book-history";

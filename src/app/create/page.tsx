@@ -51,48 +51,35 @@ import {
 } from "@/types";
 import { ParentalConsentModal } from "@/components/parental-consent-modal";
 import { TTS_VOICE_LABELS } from "@/lib/stripe";
-import type { ArtStyleId, LessonPackAccess } from "@/lib/entitlements";
+import type { LessonPackAccess } from "@/lib/entitlements";
+import { ART_STYLE_CATALOG, type ArtStyleId } from "@/lib/art-style-catalog";
 import {
   isPresetLifeLessonSlug,
 } from "@/lib/life-lesson-access";
 
-const ART_STYLE_CARDS = [
-  {
-    id: "whimsical-watercolor",
-    label: "Whimsical Watercolor",
-    description: "Soft, dreamy pastels",
-    gradient: "from-pink-200 to-blue-200 dark:from-pink-900/30 dark:to-blue-900/30",
-    image: "/artStyles/whimsicalWatercolors.png",
-  },
-  {
-    id: "pixar-3d",
-    label: "Pixar-style 3D",
-    description: "Vibrant & expressive",
-    gradient: "from-amber-200 to-orange-200 dark:from-amber-900/30 dark:to-orange-900/30",
-    image: "/artStyles/pixar3d.png",
-  },
-  {
-    id: "hand-drawn-classic",
-    label: "Hand-drawn Classic",
-    description: "Vintage storybook feel",
-    gradient: "from-amber-100 to-yellow-100 dark:from-amber-900/20 dark:to-yellow-900/20",
-    image: "/artStyles/handDrawnClassic.png",
-  },
-  {
-    id: "vibrant-cartoon",
-    label: "Vibrant Cartoon",
-    description: "Bold & playful",
-    gradient: "from-green-200 to-teal-200 dark:from-green-900/30 dark:to-teal-900/30",
-    image: "/artStyles/vibrantCartoon.png",
-  },
-  {
-    id: "photo-realistic",
-    label: "Photo Realistic",
-    description: "Lifelike & cinematic",
-    gradient: "from-slate-300 to-slate-500 dark:from-slate-700 dark:to-slate-900",
-    image: undefined,
-  },
+const ART_STYLE_GRADIENTS = [
+  "from-pink-200 to-blue-200 dark:from-pink-900/30 dark:to-blue-900/30",
+  "from-amber-200 to-orange-200 dark:from-amber-900/30 dark:to-orange-900/30",
+  "from-amber-100 to-yellow-100 dark:from-amber-900/20 dark:to-yellow-900/20",
+  "from-green-200 to-teal-200 dark:from-green-900/30 dark:to-teal-900/30",
+  "from-slate-300 to-slate-500 dark:from-slate-700 dark:to-slate-900",
+  "from-purple-200 to-indigo-200 dark:from-purple-900/30 dark:to-indigo-900/30",
+  "from-cyan-200 to-sky-200 dark:from-cyan-900/30 dark:to-sky-900/30",
+  "from-orange-200 to-rose-200 dark:from-orange-900/30 dark:to-rose-900/30",
 ];
+
+const ART_STYLE_IMAGE_BY_ID: Record<ArtStyleId, string> = Object.fromEntries(
+  ART_STYLE_CATALOG.map((style) => [style.id, `/artStyles/previews/${style.id}.png`])
+) as Record<ArtStyleId, string>;
+
+const ART_STYLE_CARDS = ART_STYLE_CATALOG.map((style, idx) => ({
+  id: style.id,
+  label: style.label,
+  description: style.description,
+  whyItWorks: style.whyItWorks,
+  gradient: ART_STYLE_GRADIENTS[idx % ART_STYLE_GRADIENTS.length],
+  image: ART_STYLE_IMAGE_BY_ID[style.id],
+}));
 
 const ALL_ART_STYLE_IDS = ART_STYLE_CARDS.map((s) => s.id) as ArtStyleId[];
 
@@ -1341,6 +1328,9 @@ function CreatePageContent() {
                                 </CardTitle>
                                 <p className="text-xs text-muted-foreground">
                                   {style.description}
+                                </p>
+                                <p className="text-xs text-muted-foreground/80">
+                                  {style.whyItWorks}
                                 </p>
                               </CardHeader>
                             </Card>

@@ -86,6 +86,7 @@ type SettingsSectionId =
   | "profile"
   | "contact"
   | "subscription"
+  | "purchaseHistory"
   | "books"
   | "printOrders"
   | "gifts"
@@ -104,6 +105,39 @@ type UserPrintOrder = {
   trackingUrls?: unknown;
   createdAt: string;
   errorMessage: string | null;
+};
+
+type PurchaseInvoice = {
+  id: string;
+  createdAt: string;
+  amountPaidCents: number;
+  currency: string;
+  status: string | null;
+  number: string | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+  billingReason: string | null;
+};
+
+type PurchaseHistory = {
+  invoices: PurchaseInvoice[];
+  printOrders: Array<{
+    id: string;
+    status: string;
+    luluJobStatus: string | null;
+    retailAmountCents: number;
+    currency: string;
+    createdAt: string;
+  }>;
+  gifts: Array<{
+    id: string;
+    code: string;
+    tier: "spark" | "magic" | "legend";
+    durationMonths: number;
+    status: "purchased" | "redeemed" | "expired" | "cancelled";
+    recipientEmail: string | null;
+    createdAt: string;
+  }>;
 };
 
 function SettingsContent() {
@@ -127,6 +161,11 @@ function SettingsContent() {
   const [resendingGiftId, setResendingGiftId] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<SettingsSectionId>("profile");
   const [printOrders, setPrintOrders] = useState<UserPrintOrder[]>([]);
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory>({
+    invoices: [],
+    printOrders: [],
+    gifts: [],
+  });
 
   useEffect(() => {
     const checkout = searchParams.get("checkout");
@@ -226,6 +265,21 @@ function SettingsContent() {
     fetch("/api/print/orders")
       .then((r) => (r.ok ? r.json() : { orders: [] }))
       .then((res) => setPrintOrders((res.orders as UserPrintOrder[]) ?? []))
+      .catch(() => {});
+
+    fetch("/api/purchases/history")
+      .then((r) =>
+        r.ok
+          ? r.json()
+          : { invoices: [], printOrders: [], gifts: [] }
+      )
+      .then((res) =>
+        setPurchaseHistory({
+          invoices: (res.invoices as PurchaseInvoice[]) ?? [],
+          printOrders: (res.printOrders as PurchaseHistory["printOrders"]) ?? [],
+          gifts: (res.gifts as PurchaseHistory["gifts"]) ?? [],
+        })
+      )
       .catch(() => {});
   }, []);
 
@@ -454,6 +508,12 @@ function SettingsContent() {
       description: "Plan and story limits",
     },
     {
+      id: "purchaseHistory",
+      label: "Purchase history",
+      icon: Package,
+      description: "All invoices, gifts, and print orders",
+    },
+    {
       id: "books",
       label: "Manage books",
       icon: BookOpen,
@@ -533,7 +593,7 @@ function SettingsContent() {
         }
       />
 
-      <main className="mx-auto w-full min-h-0 max-w-6xl flex-1 overflow-y-auto px-4 pb-16 pt-4 md:px-8">
+      <main className="mx-auto w-full min-h-0 max-w-6xl flex-1 overflow-x-hidden overflow-y-auto px-4 pb-16 pt-4 md:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -582,6 +642,7 @@ function SettingsContent() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
+              className="min-w-0"
             >
               {selectedSection === "profile" && (
                 <Card>
@@ -800,6 +861,144 @@ function SettingsContent() {
                   </Card>
                 ))}
 
+              {selectedSection === "purchaseHistory" && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="size-5" />
+                      Purchase history
+                    </CardTitle>
+                    <CardDescription>
+                      One place to view subscription invoices, print orders, and gift purchases.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div>
+                      <p className="text-sm font-medium">Subscription invoices</p>
+                      {purchaseHistory.invoices.length === 0 ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          No invoices yet.
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {purchaseHistory.invoices.map((invoice) => (
+                            <div
+                              key={invoice.id}
+                              className="rounded-xl border border-border bg-background p-3"
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold break-all">
+                                    {invoice.number || invoice.id}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(invoice.createdAt).toLocaleString()} •{" "}
+                                    {invoice.status || "unknown"}
+                                  </p>
+                                </div>
+                                <p className="text-sm font-medium">
+                                  {formatMoney(invoice.amountPaidCents, invoice.currency)}
+                                </p>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {invoice.hostedInvoiceUrl ? (
+                                  <a
+                                    href={invoice.hostedInvoiceUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-muted"
+                                  >
+                                    View invoice
+                                    <ExternalLink className="ml-1 size-3" />
+                                  </a>
+                                ) : null}
+                                {invoice.invoicePdf ? (
+                                  <a
+                                    href={invoice.invoicePdf}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-muted"
+                                  >
+                                    Download PDF
+                                    <ExternalLink className="ml-1 size-3" />
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium">Print orders</p>
+                      {purchaseHistory.printOrders.length === 0 ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          No print orders yet.
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {purchaseHistory.printOrders.map((order) => (
+                            <div
+                              key={order.id}
+                              className="rounded-xl border border-border bg-background p-3"
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold">
+                                    {statusLabel(order.status, order.luluJobStatus)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground break-all">
+                                    Ordered {new Date(order.createdAt).toLocaleString()}
+                                  </p>
+                                </div>
+                                <p className="text-sm font-medium">
+                                  {formatMoney(order.retailAmountCents, order.currency)}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium">Gift purchases</p>
+                      {purchaseHistory.gifts.length === 0 ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          No purchased gift memberships yet.
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {purchaseHistory.gifts.map((gift) => (
+                            <div
+                              key={gift.id}
+                              className="rounded-xl border border-border bg-background p-3"
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold capitalize">
+                                    {gift.tier} gift • {gift.durationMonths}{" "}
+                                    {gift.durationMonths === 1 ? "month" : "months"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Purchased {new Date(gift.createdAt).toLocaleString()} •{" "}
+                                    {gift.status}
+                                  </p>
+                                </div>
+                                <p className="text-xs text-muted-foreground break-all">
+                                  Code: {gift.code}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {selectedSection === "printOrders" && (
                 <Card>
                   <CardHeader>
@@ -847,9 +1046,9 @@ function SettingsContent() {
                               </div>
 
                               <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                <p>Order ID: {order.id}</p>
+                                <p className="break-all">Order ID: {order.id}</p>
                                 {order.luluPrintJobId ? (
-                                  <p>Lulu Job: {order.luluPrintJobId}</p>
+                                  <p className="break-all">Lulu Job: {order.luluPrintJobId}</p>
                                 ) : null}
                                 {order.errorMessage ? (
                                   <p className="text-amber-700 dark:text-amber-400">

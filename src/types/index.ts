@@ -136,6 +136,17 @@ export const ART_STYLES = [
   "hand-drawn-classic",
   "vibrant-cartoon",
   "photo-realistic",
+  "soft-storybook-watercolor",
+  "flat-vector-cartoon",
+  "crayon-hand-drawn",
+  "cut-paper-collage",
+  "classic-fairytale-illustration",
+  "pastel-kawaii",
+  "bold-comic-panel",
+  "claymation-3d",
+  "simple-anime-kids",
+  "nature-sketch-wash",
+  "retro-picture-book",
 ] as const;
 
 export type ArtStyle = (typeof ART_STYLES)[number];

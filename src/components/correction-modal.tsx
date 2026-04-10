@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PENDING_CORRECTION_KEY } from "@/lib/constants";
 import type { CorrectionMode, LessonPackAccess } from "@/lib/entitlements";
+import { ART_STYLE_CATALOG } from "@/lib/art-style-catalog";
 import { isPresetLifeLessonSlug } from "@/lib/life-lesson-access";
 import {
   GENDERS,
@@ -23,13 +24,11 @@ import {
   type CreationMetadata,
 } from "@/types";
 
-const ART_STYLE_OPTIONS: Array<{ value: CreateFormData["artStyle"]; label: string }> = [
-  { value: "whimsical-watercolor", label: "Whimsical Watercolor" },
-  { value: "pixar-3d", label: "Pixar-style 3D" },
-  { value: "hand-drawn-classic", label: "Hand-drawn Classic" },
-  { value: "vibrant-cartoon", label: "Vibrant Cartoon" },
-  { value: "photo-realistic", label: "Photo Realistic" },
-];
+const ART_STYLE_OPTIONS: Array<{ value: CreateFormData["artStyle"]; label: string }> =
+  ART_STYLE_CATALOG.map((style) => ({
+    value: style.id,
+    label: style.label,
+  }));
 
 type BookWithMeta = {
   id: string;

@@ -3,20 +3,10 @@ export type TierId = "free" | "spark" | "magic" | "legend";
 export type CorrectionMode = "none" | "name-only" | "full-regenerate" | "single-page";
 export type PdfLevel = "basic" | "premium";
 export type LessonPackAccess = "default" | "custom";
-export type ArtStyleId =
-  | "whimsical-watercolor"
-  | "pixar-3d"
-  | "hand-drawn-classic"
-  | "vibrant-cartoon"
-  | "photo-realistic";
+import { ART_STYLE_IDS, type ArtStyleId } from "./art-style-catalog";
+export type { ArtStyleId } from "./art-style-catalog";
 
-export const ALL_ART_STYLES: ArtStyleId[] = [
-  "whimsical-watercolor",
-  "pixar-3d",
-  "hand-drawn-classic",
-  "vibrant-cartoon",
-  "photo-realistic",
-];
+export const ALL_ART_STYLES: ArtStyleId[] = [...ART_STYLE_IDS];
 
 export const TTS_DEFAULT_VOICE = "nova";
 export const TTS_VOICES_MAGIC = ["nova", "alloy", "shimmer"] as const;

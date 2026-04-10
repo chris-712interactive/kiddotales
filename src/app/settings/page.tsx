@@ -39,6 +39,8 @@ type SettingsData = {
   bookLimit: number;
   bookLimitPeriod?: "total" | "monthly";
   subscriptionTier: string;
+  lessonPackAccess?: "default" | "custom";
+  commercialUse?: boolean;
   accountSubscriptionTier?: string;
   familySharing?: {
     role: "owner" | "member" | null;
@@ -739,6 +741,19 @@ function SettingsContent() {
                         </Link>
                       )}
                     </div>
+                    {data.commercialUse && (
+                      <div className="rounded-xl border-2 border-border bg-muted/30 px-4 py-3">
+                        <p className="text-sm font-medium text-foreground">
+                          Commercial use (Legend)
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Your plan allows personal and commercial use of stories you create (for
+                          example selling printed copies or using illustrations in your own
+                          business), subject to our Terms of Service. Downloaded PDFs for
+                          non-Legend plans include a personal, non-commercial notice.
+                        </p>
+                      </div>
+                    )}
                     {(getTierCapabilities(subscriptionTier).sharingSeats > 0 ||
                       data.familySharing?.role === "member") && (
                       <div className="rounded-xl border-2 border-border bg-muted/30 px-4 py-3">

@@ -25,7 +25,7 @@ import { CorrectionModal } from "@/components/correction-modal";
 import { AppHeader } from "@/components/app-header";
 import { useSession } from "next-auth/react";
 import { PENDING_BOOK_KEY, PREFETCH_BOOK_KEY_PREFIX } from "@/lib/constants";
-import type { CorrectionMode } from "@/lib/entitlements";
+import type { CorrectionMode, LessonPackAccess } from "@/lib/entitlements";
 
 function BookViewerContent() {
   const searchParams = useSearchParams();
@@ -42,6 +42,8 @@ function BookViewerContent() {
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
   const [correctionMode, setCorrectionMode] = useState<CorrectionMode>("none");
   const [pdfLevel, setPdfLevel] = useState<"basic" | "premium">("basic");
+  const [lessonPackAccess, setLessonPackAccess] =
+    useState<LessonPackAccess>("default");
   const [printOrderingEnabled, setPrintOrderingEnabled] = useState(false);
   const [deferredCorrectFromUrl, setDeferredCorrectFromUrl] = useState(false);
   const { data: session } = useSession();
@@ -55,16 +57,23 @@ function BookViewerContent() {
           setSubscriptionTier(res.subscriptionTier ?? "free");
           setCorrectionMode((res.correctionMode as CorrectionMode) ?? "none");
           setPdfLevel((res.pdfLevel as "basic" | "premium") ?? "basic");
+          if (res.lessonPackAccess === "custom" || res.lessonPackAccess === "default") {
+            setLessonPackAccess(res.lessonPackAccess);
+          } else {
+            setLessonPackAccess("default");
+          }
         })
         .catch(() => {
           setSubscriptionTier("free");
           setCorrectionMode("none");
           setPdfLevel("basic");
+          setLessonPackAccess("default");
         });
     } else {
       setSubscriptionTier(null);
       setCorrectionMode("none");
       setPdfLevel("basic");
+      setLessonPackAccess("default");
     }
   }, [session?.user]);
 
@@ -727,6 +736,7 @@ function BookViewerContent() {
               creationMetadata: book.creationMetadata,
             }}
             correctionMode={correctionMode}
+            lessonPackAccess={lessonPackAccess}
             currentPageIndex={hasDedication ? Math.max(0, currentPage - 1) : currentPage}
             onClose={() => setShowCorrectionModal(false)}
             onSuccess={(updated) => {

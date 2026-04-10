@@ -151,6 +151,15 @@ export const LIFE_LESSONS = [
   "honesty",
 ] as const;
 
+/** Legend-only preset themes (lesson pack access: custom). */
+export const EXTENDED_LIFE_LESSONS = [
+  "curiosity",
+  "empathy",
+  "self-confidence",
+  "cooperation",
+  "respect-for-differences",
+] as const;
+
 export const INTERESTS = [
   "dinosaurs",
   "space",

@@ -95,6 +95,8 @@ export async function GET() {
       allowedArtStyles,
       correctionMode: tierCapabilities.correctionMode,
       pdfLevel: tierCapabilities.pdfLevel,
+      lessonPackAccess: tierCapabilities.lessonPackAccess,
+      commercialUse: tierCapabilities.commercialUse,
       maxChildProfiles: tierCapabilities.maxChildProfiles,
       childProfileCount: childProfiles.length,
       subscriptionTier: featureTier,

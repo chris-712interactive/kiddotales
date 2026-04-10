@@ -12,6 +12,7 @@ import { uploadImageToStorage } from "@/lib/supabase-storage";
 import Replicate from "replicate";
 import { getTierCapabilities } from "@/lib/entitlements";
 import { resolveFamilyPlanContext } from "@/lib/family-sharing";
+import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
 import type { CreationMetadata, CharacterAppearance } from "@/types";
 
 /** Compare form data with metadata. Returns true if only childName changed. */
@@ -159,6 +160,14 @@ export async function POST(
     dedication: meta?.dedication,
     preferredVoice: meta?.preferredVoice,
   };
+
+  const lessonCheck = validateLifeLessonForAccess(
+    corrected.lifeLesson,
+    tierCapabilities.lessonPackAccess
+  );
+  if (!lessonCheck.ok) {
+    return NextResponse.json({ error: lessonCheck.error }, { status: 403 });
+  }
 
   const nameOnly = isNameOnlyChange(meta, corrected);
   const requestedMode: CorrectionMode = correctionMode ?? "full-regenerate";

@@ -11,11 +11,13 @@ import { Select } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PENDING_CORRECTION_KEY } from "@/lib/constants";
-import type { CorrectionMode } from "@/lib/entitlements";
+import type { CorrectionMode, LessonPackAccess } from "@/lib/entitlements";
+import { isPresetLifeLessonSlug } from "@/lib/life-lesson-access";
 import {
   GENDERS,
   INTERESTS,
   LIFE_LESSONS,
+  EXTENDED_LIFE_LESSONS,
   type BookData,
   type CreateFormData,
   type CreationMetadata,
@@ -43,12 +45,14 @@ export function CorrectionModal({
   book,
   currentPageIndex,
   correctionMode,
+  lessonPackAccess = "default",
   onClose,
   onSuccess,
 }: {
   book: BookWithMeta;
   currentPageIndex?: number;
   correctionMode?: CorrectionMode;
+  lessonPackAccess?: LessonPackAccess;
   onClose: () => void;
   onSuccess: (updated: BookWithMeta) => void;
 }) {
@@ -76,6 +80,22 @@ export function CorrectionModal({
     }
     return 0;
   });
+
+  const savedLifeLesson = meta?.lifeLesson ?? "kindness";
+  useEffect(() => {
+    const access = lessonPackAccess ?? "default";
+    const raw = savedLifeLesson;
+    if (isPresetLifeLessonSlug(raw, access)) {
+      setForm((p) => ({ ...p, lifeLesson: raw }));
+      setCustomLifeLesson("");
+    } else if (access === "custom") {
+      setForm((p) => ({ ...p, lifeLesson: "custom" }));
+      setCustomLifeLesson(raw);
+    } else {
+      setForm((p) => ({ ...p, lifeLesson: "kindness" }));
+      setCustomLifeLesson("");
+    }
+  }, [lessonPackAccess, book.id, savedLifeLesson]);
 
   const toggleInterest = (interest: string) => {
     setForm((prev) => ({
@@ -464,9 +484,17 @@ export function CorrectionModal({
                       {LIFE_LESSONS.map((l) => (
                         <option key={l} value={l}>{l.replace(/-/g, " ")}</option>
                       ))}
-                      <option value="custom">Custom</option>
+                      {lessonPackAccess === "custom" &&
+                        EXTENDED_LIFE_LESSONS.map((l) => (
+                          <option key={l} value={l}>
+                            {l.replace(/-/g, " ")}
+                          </option>
+                        ))}
+                      {lessonPackAccess === "custom" && (
+                        <option value="custom">Custom (your words)</option>
+                      )}
                     </Select>
-                    {form.lifeLesson === "custom" && (
+                    {lessonPackAccess === "custom" && form.lifeLesson === "custom" && (
                       <Input
                         placeholder="e.g. being patient"
                         value={customLifeLesson}

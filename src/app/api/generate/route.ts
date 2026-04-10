@@ -31,6 +31,7 @@ import {
   resolveFamilyPlanContext,
   type FamilyPlanContext,
 } from "@/lib/family-sharing";
+import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
 
@@ -256,6 +257,17 @@ export async function POST(request: NextRequest) {
           );
         }
       }
+    }
+
+    const lessonTier = familyPlan?.featureTier ?? "free";
+    const lessonAccess = getTierCapabilities(lessonTier).lessonPackAccess;
+    const rawLifeLesson =
+      typeof lifeLesson === "string" && lifeLesson.trim()
+        ? lifeLesson.trim()
+        : "kindness";
+    const lessonCheck = validateLifeLessonForAccess(rawLifeLesson, lessonAccess);
+    if (!lessonCheck.ok) {
+      return NextResponse.json({ error: lessonCheck.error }, { status: 403 });
     }
 
     if (!process.env.OPENAI_API_KEY) {

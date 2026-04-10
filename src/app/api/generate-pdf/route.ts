@@ -108,7 +108,9 @@ export async function POST(request: NextRequest) {
     const plan = session?.user?.id
       ? await resolveFamilyPlanContext(session.user.id)
       : null;
-    const pdfLevel = getTierCapabilities(plan?.featureTier ?? "free").pdfLevel;
+    const caps = getTierCapabilities(plan?.featureTier ?? "free");
+    const pdfLevel = caps.pdfLevel;
+    const commercialUse = caps.commercialUse;
 
     const body = (await request.json()) as
       | { book: BookData; orientation?: "portrait" | "landscape"; pdfVariant?: PdfVariant }
@@ -378,6 +380,23 @@ export async function POST(request: NextRequest) {
         font,
         color: PAGE_NUM_COLOR,
       });
+    }
+
+    if (!commercialUse) {
+      const pages = pdfDoc.getPages();
+      const lastPage = pages[pages.length - 1];
+      if (lastPage) {
+        const notice =
+          "Personal, non-commercial use only. Commercial use requires a Legend plan.";
+        const noticeSize = 7;
+        lastPage.drawText(notice, {
+          x: OUTER_MARGIN,
+          y: 20,
+          size: noticeSize,
+          font,
+          color: PAGE_NUM_COLOR,
+        });
+      }
     }
 
     const pdfBytes = await pdfDoc.save();

@@ -41,6 +41,7 @@ import {
   GENDERS,
   INTERESTS,
   LIFE_LESSONS,
+  EXTENDED_LIFE_LESSONS,
   HAIR_COLORS,
   HAIR_STYLES,
   SKIN_TONES,
@@ -50,7 +51,10 @@ import {
 } from "@/types";
 import { ParentalConsentModal } from "@/components/parental-consent-modal";
 import { TTS_VOICE_LABELS } from "@/lib/stripe";
-import type { ArtStyleId } from "@/lib/entitlements";
+import type { ArtStyleId, LessonPackAccess } from "@/lib/entitlements";
+import {
+  isPresetLifeLessonSlug,
+} from "@/lib/life-lesson-access";
 
 const ART_STYLE_CARDS = [
   {
@@ -227,6 +231,8 @@ function CreatePageContent() {
   });
 
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
+  const [lessonPackAccess, setLessonPackAccess] =
+    useState<LessonPackAccess>("default");
   const [voiceOptions, setVoiceOptions] = useState<string[]>([]);
   const [allowedArtStyles, setAllowedArtStyles] = useState<ArtStyleId[]>(ALL_ART_STYLE_IDS);
   const [playingSample, setPlayingSample] = useState<string | null>(null);
@@ -473,6 +479,11 @@ function CreatePageContent() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data?.subscriptionTier) setSubscriptionTier(data.subscriptionTier);
+          if (data?.lessonPackAccess === "custom" || data?.lessonPackAccess === "default") {
+            setLessonPackAccess(data.lessonPackAccess);
+          } else {
+            setLessonPackAccess("default");
+          }
           if (Array.isArray(data?.voiceOptions)) setVoiceOptions(data.voiceOptions);
           if (Array.isArray(data?.allowedArtStyles) && data.allowedArtStyles.length > 0) {
             setAllowedArtStyles(
@@ -488,11 +499,27 @@ function CreatePageContent() {
         .catch(() => setSettingsFetched(true));
     } else {
       setSubscriptionTier("free");
+      setLessonPackAccess("default");
       setVoiceOptions([]);
       setAllowedArtStyles(ALL_ART_STYLE_IDS);
       setSettingsFetched(true);
     }
   }, [status]);
+
+  useEffect(() => {
+    if (!settingsFetched) return;
+    if (lessonPackAccess !== "default") return;
+    setForm((prev) => {
+      if (
+        prev.lifeLesson === "custom" ||
+        !isPresetLifeLessonSlug(prev.lifeLesson, "default")
+      ) {
+        return { ...prev, lifeLesson: "kindness" };
+      }
+      return prev;
+    });
+    setCustomLifeLesson("");
+  }, [lessonPackAccess, settingsFetched]);
 
   useEffect(() => {
     if (allowedArtStyles.includes(form.artStyle as ArtStyleId)) return;
@@ -1184,6 +1211,23 @@ function CreatePageContent() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lifeLesson">Life lesson</Label>
+                      {lessonPackAccess === "custom" ? (
+                        <p className="text-sm text-muted-foreground">
+                          Legend includes extra themes and a custom lesson line — write your own in
+                          a few words.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Choose one of our standard themes.{" "}
+                          <Link
+                            href="/pricing"
+                            className="font-medium text-primary underline hover:no-underline"
+                          >
+                            Legend
+                          </Link>{" "}
+                          adds more packs and custom wording.
+                        </p>
+                      )}
                       <Select
                         id="lifeLesson"
                         value={form.lifeLesson}
@@ -1196,9 +1240,17 @@ function CreatePageContent() {
                             {l.replace(/-/g, " ")}
                           </option>
                         ))}
-                        <option value="custom">Custom</option>
+                        {lessonPackAccess === "custom" &&
+                          EXTENDED_LIFE_LESSONS.map((l) => (
+                            <option key={l} value={l}>
+                              {l.replace(/-/g, " ")}
+                            </option>
+                          ))}
+                        {lessonPackAccess === "custom" && (
+                          <option value="custom">Custom (your words)</option>
+                        )}
                       </Select>
-                      {form.lifeLesson === "custom" && (
+                      {lessonPackAccess === "custom" && form.lifeLesson === "custom" && (
                         <Input
                           placeholder="e.g. being patient"
                           value={customLifeLesson}

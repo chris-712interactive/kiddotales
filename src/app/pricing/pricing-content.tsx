@@ -270,7 +270,7 @@ export default function PricingContent() {
         }
       />
 
-      <main className="mx-auto min-h-0 w-full max-w-5xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 [-webkit-overflow-scrolling:touch] md:px-8">
+      <main className="mx-auto min-h-0 w-full max-w-5xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain pb-[max(1rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-8 [-webkit-overflow-scrolling:touch] md:pl-8 md:pr-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -316,7 +316,7 @@ export default function PricingContent() {
           </motion.div>
         )}
 
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {/* Free tier */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

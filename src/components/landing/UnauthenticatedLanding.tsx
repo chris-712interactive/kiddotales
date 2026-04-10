@@ -217,8 +217,8 @@ function PlanTeaser() {
   return (
     <section className="mt-14">
       <Reveal>
-        <div className="flex items-end justify-between gap-4">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <h2 className="text-2xl font-bold text-foreground">
               Find the right plan for your family
             </h2>
@@ -226,18 +226,22 @@ function PlanTeaser() {
               Features update as you upgrade—no surprises.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/pricing">
-              <Button variant="outline">Compare full plans</Button>
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:shrink-0">
+            <Link href="/pricing" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto">
+                Compare full plans
+              </Button>
             </Link>
-            <Link href="/pricing?intent=gift">
-              <Button variant="outline">Gift a membership</Button>
+            <Link href="/pricing?intent=gift" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto">
+                Gift a membership
+              </Button>
             </Link>
           </div>
         </div>
       </Reveal>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-4">
+      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {tierOrder.map((tierId, idx) => {
           const tier = SUBSCRIPTION_TIERS[tierId];
           const isLegend = tierId === "legend";
@@ -389,16 +393,16 @@ export default function UnauthenticatedLanding() {
       {/* Hero */}
       <section className="flex flex-col items-center text-center">
         <motion.div
-          className="mb-6 flex items-center justify-center gap-4"
+          className="mb-6 flex items-center justify-center gap-2 sm:gap-4"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
         >
-          <Sparkles className="size-12 text-yellow-500" />
-          <div className="rounded-2xl bg-primary/20 p-6 shadow-xl">
-            <BookOpen className="size-24" />
+          <Sparkles className="size-8 shrink-0 text-yellow-500 sm:size-12" />
+          <div className="rounded-2xl bg-primary/20 p-4 shadow-xl sm:p-6">
+            <BookOpen className="size-16 sm:size-24" />
           </div>
-          <Sparkles className="size-12 text-yellow-500" />
+          <Sparkles className="size-8 shrink-0 text-yellow-500 sm:size-12" />
         </motion.div>
 
         <motion.h1
@@ -531,12 +535,12 @@ export default function UnauthenticatedLanding() {
           </p>
         </Reveal>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-4">
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <Reveal delay={0.02}>
             <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
               <div className="flex items-center gap-2 text-primary">
-                <Sparkles className="size-5" />
-                <div className="text-sm font-semibold">Personalized</div>
+                <Sparkles className="size-5 shrink-0" />
+                <div className="min-w-0 text-sm font-semibold">Personalized</div>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 Stories that include your child’s details—so it feels real.
@@ -546,8 +550,8 @@ export default function UnauthenticatedLanding() {
           <Reveal delay={0.06}>
             <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
               <div className="flex items-center gap-2 text-primary">
-                <Wand2 className="size-5" />
-                <div className="text-sm font-semibold">Beautiful art</div>
+                <Wand2 className="size-5 shrink-0" />
+                <div className="min-w-0 text-sm font-semibold">Beautiful art</div>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 Illustration styles that make the story come alive.
@@ -557,8 +561,8 @@ export default function UnauthenticatedLanding() {
           <Reveal delay={0.1}>
             <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
               <div className="flex items-center gap-2 text-primary">
-                <Volume2 className="size-5" />
-                <div className="text-sm font-semibold">Optional read-aloud</div>
+                <Volume2 className="size-5 shrink-0" />
+                <div className="min-w-0 text-sm font-semibold">Optional read-aloud</div>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 Add narration for supported plans and listen together.
@@ -568,8 +572,8 @@ export default function UnauthenticatedLanding() {
           <Reveal delay={0.14}>
             <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
               <div className="flex items-center gap-2 text-primary">
-                <FileText className="size-5" />
-                <div className="text-sm font-semibold">Print-ready PDFs</div>
+                <FileText className="size-5 shrink-0" />
+                <div className="min-w-0 text-sm font-semibold">Print-ready PDFs</div>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 Download your book and make it shelf-worthy.
@@ -590,7 +594,7 @@ export default function UnauthenticatedLanding() {
           </p>
         </Reveal>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
             {
               num: "1",
@@ -614,11 +618,11 @@ export default function UnauthenticatedLanding() {
             <Reveal key={step.num} delay={idx * 0.06}>
               <div className="relative rounded-2xl border border-border bg-card p-6 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary font-bold">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 font-bold text-primary">
                     {step.num}
                   </div>
-                  {step.icon}
-                  <h3 className="text-base font-semibold text-foreground">
+                  <span className="shrink-0">{step.icon}</span>
+                  <h3 className="min-w-0 flex-1 text-base font-semibold text-foreground">
                     {step.title}
                   </h3>
                 </div>
@@ -647,7 +651,7 @@ export default function UnauthenticatedLanding() {
           </div>
         </Reveal>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {TESTIMONIALS.map((t, idx) => (
             <Reveal key={t.author} delay={idx * 0.06}>
               <div className="rounded-2xl border-2 border-border bg-card p-6 shadow-lg">

@@ -5,8 +5,8 @@ import { FeedbackTrigger } from "./feedback-trigger";
 
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-muted/30 py-6">
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-4 px-4 text-sm text-muted-foreground">
+    <footer className="border-t border-border bg-muted/30 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-6">
+      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 text-sm text-muted-foreground sm:gap-4">
         <Link href="/privacy" className="underline hover:text-foreground">
           Privacy Policy
         </Link>

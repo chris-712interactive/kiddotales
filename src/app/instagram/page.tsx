@@ -92,7 +92,7 @@ export default async function InstagramLandingPage() {
       <LandingThemeLock />
       <AppHeader className="shrink-0" />
 
-      <main className="instagramLandingPage mx-auto min-h-0 w-full max-w-6xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 [-webkit-overflow-scrolling:touch] md:px-8">
+      <main className="instagramLandingPage mx-auto min-h-0 w-full max-w-6xl flex-1 touch-pan-y overflow-y-auto overscroll-y-contain pb-[max(1rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-8 [-webkit-overflow-scrolling:touch] md:pl-8 md:pr-8">
         <section className="rounded-3xl border-2 border-border bg-card p-6 shadow-xl md:p-10">
           <div className="mx-auto max-w-3xl text-center">
             <div className="mb-4 flex justify-center">
@@ -118,15 +118,15 @@ export default async function InstagramLandingPage() {
               Personalized storybooks in minutes with illustrations, optional AI voice, and
               print-ready PDFs. Start free, then upgrade when you want more stories each month.
             </p>
-            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href={signInHref}>
-                <Button size="lg" className="min-w-[220px]">
+            <div className="mt-7 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
+              <Link href={signInHref} className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto sm:min-w-[200px]">
                   <MessageCircleHeart className="mr-2 size-5" />
                   Sign In to Get Started
                 </Button>
               </Link>
-              <Link href={pricingHref}>
-                <Button size="lg" variant="outline" className="min-w-[220px]">
+              <Link href={pricingHref} className="w-full sm:w-auto">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto sm:min-w-[200px]">
                   View Plans & Pricing
                 </Button>
               </Link>
@@ -161,7 +161,7 @@ export default async function InstagramLandingPage() {
           </div>
         </section>
 
-        <section className="mt-12 grid gap-4 rounded-2xl border border-border bg-card p-6 md:grid-cols-3">
+        <section className="mt-12 grid gap-4 rounded-2xl border border-border bg-card p-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-1 size-5 shrink-0 text-primary" />
             <div>
@@ -198,7 +198,7 @@ export default async function InstagramLandingPage() {
           <p className="mx-auto mt-2 max-w-2xl text-center text-muted-foreground">
             Start free, then upgrade when you want more books, AI voice usage, and premium tools.
           </p>
-          <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {(Object.keys(SUBSCRIPTION_TIERS) as Array<keyof typeof SUBSCRIPTION_TIERS>).map(
               (tierKey) => {
                 const tier = SUBSCRIPTION_TIERS[tierKey];
@@ -261,7 +261,7 @@ export default async function InstagramLandingPage() {
           <h2 className="text-center text-2xl font-bold text-foreground md:text-3xl">
             Loved by parents
           </h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {SOCIAL_PROOF.map((item) => (
               <div key={item.author} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <p className="text-sm text-muted-foreground">&ldquo;{item.quote}&rdquo;</p>
@@ -271,26 +271,26 @@ export default async function InstagramLandingPage() {
           </div>
         </section>
 
-        <section className="mt-14 rounded-3xl border-2 border-primary/30 bg-card p-8 text-center shadow-lg">
-          <h2 className="text-3xl font-bold text-foreground">Ready to start your first story?</h2>
+        <section className="mt-14 rounded-3xl border-2 border-primary/30 bg-card p-6 text-center shadow-lg sm:p-8">
+          <h2 className="text-2xl font-bold text-foreground sm:text-3xl">Ready to start your first story?</h2>
           <p className="mx-auto mt-2 max-w-2xl text-muted-foreground">
             Sign in to begin creating your child&apos;s personalized bedtime book, then pick the
             plan that matches your family.
           </p>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href={signInHref}>
-              <Button size="lg" className="min-w-[220px]">
+          <div className="mt-6 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
+            <Link href={signInHref} className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto sm:min-w-[180px]">
                 <BookOpen className="mr-2 size-5" />
                 Sign In & Start
               </Button>
             </Link>
-            <Link href={pricingHref}>
-              <Button size="lg" variant="outline" className="min-w-[220px]">
+            <Link href={pricingHref} className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto sm:min-w-[180px]">
                 Compare All Plans
               </Button>
             </Link>
-            <Link href={createHref}>
-              <Button size="lg" variant="outline" className="min-w-[220px]">
+            <Link href={createHref} className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto sm:min-w-[180px]">
                 Preview Creation Flow
               </Button>
             </Link>

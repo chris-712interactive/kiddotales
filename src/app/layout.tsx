@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
@@ -22,6 +22,12 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
@@ -87,7 +93,7 @@ export default function RootLayout({
             <a href="#main" className="sr-only skip-link">
               Skip to main content
             </a>
-            <div className="flex h-screen flex-col overflow-hidden">
+            <div className="flex h-[100dvh] flex-col overflow-hidden">
               <main
               id="main"
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"

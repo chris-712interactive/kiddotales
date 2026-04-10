@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, BookOpen, Home, BookMarked, Bell, Settings } from "lucide-react";
+import { Menu, X, BookOpen, Home, BookMarked, Bell, Settings, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AuthButtons } from "@/components/auth-buttons";
@@ -23,6 +23,7 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [creditsLeft, setCreditsLeft] = useState<number | null>(null);
   const [creditPeriod, setCreditPeriod] = useState<"monthly" | "total" | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -67,6 +68,7 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
     if (!session?.user) {
       setCreditsLeft(null);
       setCreditPeriod(null);
+      setIsAdmin(false);
       return;
     }
 
@@ -79,6 +81,7 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
           const limit = typeof data.bookLimit === "number" ? data.bookLimit : null;
           const count = typeof data.bookCount === "number" ? data.bookCount : null;
           const period = data.bookLimitPeriod === "monthly" ? "monthly" : "total";
+          setIsAdmin(Boolean(data.isAdmin));
           if (limit == null || count == null) {
             setCreditsLeft(null);
             setCreditPeriod(null);
@@ -91,6 +94,7 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
           if (!mounted) return;
           setCreditsLeft(null);
           setCreditPeriod(null);
+          setIsAdmin(false);
         });
     };
 
@@ -221,6 +225,14 @@ export function AppHeader({ pageActions, className }: AppHeaderProps) {
                           {unreadCount}
                         </span>
                       ) : null}
+                    </Button>
+                  </Link>
+                ) : null}
+                {session?.user && isAdmin ? (
+                  <Link href="/admin" className="block w-full" onClick={() => setOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Shield className="mr-2 size-4" />
+                      Admin
                     </Button>
                   </Link>
                 ) : null}

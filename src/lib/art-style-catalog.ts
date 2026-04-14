@@ -71,7 +71,7 @@ export const ART_STYLE_CATALOG: ArtStyleSpec[] = [
     description: "Lifelike and cinematic",
     whyItWorks: "Premium look for families who prefer realistic portraits and environments.",
     promptDescriptor:
-      "photorealistic family-friendly illustration, natural skin tones, realistic hair detail, soft diffused daylight, cinematic composition",
+      "ultra-photorealistic cinematic photography, natural skin tones, realistic skin texture, lifelike hair strands, physically accurate lighting, 35mm lens depth of field",
   },
   {
     id: "soft-storybook-watercolor",

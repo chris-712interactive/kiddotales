@@ -67,20 +67,50 @@ function replicateFluxSafetyTolerance(): number {
   return Math.min(5, Math.max(1, n));
 }
 
-function replicateFluxProImageInput(prompt: string) {
+function replicateFluxProImageInput(prompt: string, seed?: number) {
   return {
     prompt,
     output_format: "png" as const,
     aspect_ratio: "4:5" as const,
     resolution: REPLICATE_FLUX_IMAGE_RESOLUTION,
     safety_tolerance: replicateFluxSafetyTolerance(),
+    ...(typeof seed === "number" ? { seed } : {}),
   };
 }
 
-/** Builds character description from optional parent-selected appearance. */
-function buildAppearancePrefix(
-  childName: string,
-  age: number,
+function hashStringToSeed(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0;
+  }
+  // Keep seed within a positive 31-bit range.
+  return Math.abs(hash) % 2_147_483_647;
+}
+
+function resolveBaseSeed(input: string): number {
+  const envSeedRaw = process.env.REPLICATE_FLUX_SEED?.trim();
+  if (envSeedRaw) {
+    const parsed = parseInt(envSeedRaw, 10);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return hashStringToSeed(input);
+}
+
+function normalizeScenePromptForWardrobe(scenePrompt: string): string {
+  if (!scenePrompt) return "";
+  const clothingPattern =
+    /\b(outfit|wearing|wears|dressed|dress|shirt|t-?shirt|sweater|hoodie|jacket|coat|cardigan|jeans|pants|trousers|shorts|skirt|leggings|shoes|sneakers|boots|sandals|pajamas|costume|uniform)\b/i;
+  const sentenceSplit = scenePrompt
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const kept = sentenceSplit.filter((s) => !clothingPattern.test(s));
+  const normalized = (kept.length ? kept : sentenceSplit).join(" ");
+  return normalized.trim();
+}
+
+/** Builds appearance-lock suffix from optional parent-selected appearance. */
+function buildAppearanceLockSuffix(
   pronouns: string,
   appearance?: CharacterAppearance
 ): string | null {
@@ -90,10 +120,9 @@ function buildAppearancePrefix(
     a.hairColor || a.hairStyle || a.skinTone || a.eyeColor || a.glasses || a.freckles;
   if (!hasAny) return null;
 
-  const isGirl = /she\/her|girl/i.test(pronouns || "");
-  const isBoy = /he\/him|boy/i.test(pronouns || "");
-  const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
-  const parts: string[] = [`A ${age}-year-old ${genderPhrase} named ${childName}`];
+  const isGirl = /she\/her|girl/i.test(pronouns);
+  const isBoy = /he\/him|boy/i.test(pronouns);
+  const parts: string[] = [];
 
   const hair: string[] = [];
   if (a.hairColor && typeof a.hairColor === "string") hair.push(a.hairColor);
@@ -105,10 +134,13 @@ function buildAppearancePrefix(
   if (a.glasses) parts.push("wearing glasses");
   if (a.freckles) parts.push("freckles");
 
-  return (
-    parts.join(", ") +
-    ", human ears, no animal features, modest age-appropriate fully clothed outfit, children's book illustration style."
-  );
+  const outfitLock = isGirl
+    ? "wearing the exact same outfit in every image: a light pink cardigan over a pastel top, denim bottoms, white socks, and pink sneakers"
+    : isBoy
+      ? "wearing the exact same outfit in every image: a sky-blue tee, denim bottoms, white socks, and blue sneakers"
+      : "wearing the exact same outfit in every image: a pastel tee, denim bottoms, white socks, and sneakers";
+
+  return `Appearance lock: ${parts.join(", ")}, human ears, no animal features, ${outfitLock}.`;
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -416,25 +448,27 @@ export async function POST(request: NextRequest) {
 
     // Character consistency: prepend same description to every image prompt
     // Parent-selected appearance overrides GPT's characterDescription when provided
-    const appearancePrefix = buildAppearancePrefix(
-      childName,
-      age || 5,
-      pronouns || "",
-      appearance
-    );
+    const appearanceLockSuffix = buildAppearanceLockSuffix(pronouns || "", appearance);
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
     let characterPrefix =
-      appearancePrefix ||
       parsed.characterDescription?.trim() ||
-      `A ${age || 5}-year-old ${genderPhrase} named ${childName}, children's book illustration style.`;
+      `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features, wearing the exact same outfit in every image: a pastel top, denim bottoms, white socks, and sneakers.`;
+
+    if (appearanceLockSuffix) {
+      characterPrefix = `${characterPrefix} ${appearanceLockSuffix}`;
+    }
 
     if (isPhotoRealistic) {
       characterPrefix =
-        characterPrefix.replace(/,\s*children's book illustration style\.?$/i, "") +
-        ". Realistic skin texture, natural skin tones, lifelike hair detail, soft diffused natural lighting on face, photorealistic child portrait quality";
+        characterPrefix +
+        " Realistic skin texture, natural skin tones, lifelike hair detail, soft diffused natural lighting on face, photorealistic child portrait quality.";
     }
+
+    const wardrobeLockSuffix =
+      " Wardrobe lock: the child must keep the exact same clothing, colors, layers, footwear, and accessories in the cover and every page. No outfit changes.";
+    const wardrobeReminder = " Use the exact same locked outfit for the child in this scene.";
 
     const secondaryChar =
       parsed.secondaryCharacterDescription?.trim() || null;
@@ -450,21 +484,32 @@ export async function POST(request: NextRequest) {
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
-    // Positive-only phrasing: FLUX safety filters often false-flag prompts that mention
-    // nudity/underwear/bathing even as negations (E005).
-    const imageSafetySuffix =
-      " Wholesome children's picture book illustration, G-rated family audience. Characters in normal modest everyday outfits; cheerful innocent scenes and poses suited to ages 3–8; bright friendly classic storybook mood.";
+    const imageSafetySuffix = isPhotoRealistic
+      ? " Fully clothed child, age-appropriate outfit, G-rated family-safe scene."
+      : " Wholesome children's picture book illustration, G-rated family audience. Characters in normal modest everyday outfits; cheerful innocent scenes and poses suited to ages 3–8; bright friendly classic storybook mood.";
+    const photoRealNegativeSuffix =
+      " No illustration, no cartoon, no anime, no 3D render, no painting, no doll-like face, no oversized eyes, no plastic skin, no fantasy art style.";
+    const photoRealStyleLock =
+      " Ultra-photorealistic cinematic photograph, 35mm lens, natural skin texture, realistic hair strands, accurate child proportions, physically realistic lighting, shallow depth of field, high dynamic range, subtle film grain, color-true daylight.";
+    const bookSeedBase = resolveBaseSeed(
+      [childName, String(age || 5), pronouns || "", parsed.title || "", lifeLesson || ""].join("|")
+    );
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
+    const normalizedCoverPrompt = `${normalizeScenePromptForWardrobe(coverPrompt)}${wardrobeReminder}`;
     const fullCoverPrompt = effectiveSecondaryChar
-      ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`
-      : `${characterPrefix}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`;
+      ? isPhotoRealistic
+        ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: The child and creature are two separate beings. ${effectiveSecondaryChar}. ${normalizedCoverPrompt}. ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
+        : `${characterPrefix}${wardrobeLockSuffix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${normalizedCoverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`
+      : isPhotoRealistic
+        ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: ${normalizedCoverPrompt}. ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
+        : `${characterPrefix}${wardrobeLockSuffix}. ${normalizedCoverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`;
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
         const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
-          input: replicateFluxProImageInput(fullCoverPrompt),
+          input: replicateFluxProImageInput(fullCoverPrompt, bookSeedBase),
         });
         const result = Array.isArray(output) ? output[0] : output;
         if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
@@ -492,17 +537,25 @@ export async function POST(request: NextRequest) {
         await new Promise((r) => setTimeout(r, 10000)); // 6 per minute throttle limit on replicate.
       }
       const page = parsed.pages[i];
-      const promptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
+      const rawPromptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
+      const normalizedPromptText = normalizeScenePromptForWardrobe(rawPromptText);
+      const promptText = `${normalizedPromptText}${wardrobeReminder}`;
       const includeSecondary =
         effectiveSecondaryChar && page.secondaryCharacterInScene === true;
       const scenePart = includeSecondary
-        ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}. ${styleSuffix}`
-        : `${characterPrefix}. ${promptText}. ${styleSuffix}`;
-      const fullPrompt = `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
+        ? isPhotoRealistic
+          ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}.`
+          : `${characterPrefix}${wardrobeLockSuffix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}. ${styleSuffix}`
+        : isPhotoRealistic
+          ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: ${promptText}.`
+          : `${characterPrefix}${wardrobeLockSuffix}. ${promptText}. ${styleSuffix}`;
+      const fullPrompt = isPhotoRealistic
+        ? `${scenePart} ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
+        : `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
-            input: replicateFluxProImageInput(fullPrompt),
+            input: replicateFluxProImageInput(fullPrompt, bookSeedBase + i + 1),
           });
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {

@@ -60,6 +60,8 @@ export interface CharacterAppearance {
   eyeColor?: string;
   glasses?: boolean;
   freckles?: boolean;
+  /** Optional outfit phrase from photo analysis; used for wardrobe lock wording. */
+  outfitLockSuggestion?: string;
 }
 
 export interface CreateFormData {
@@ -71,6 +73,10 @@ export interface CreateFormData {
   artStyle: string;
   /** Optional appearance overrides for the main character */
   appearance?: CharacterAppearance;
+  /** Rich visual description for illustrations (from profile or one-off photo analysis). */
+  characterAppearanceDescription?: string;
+  /** When set, server loads saved profile fields and merges appearance for this book. */
+  childProfileId?: string;
   /** AI voice for read-aloud (Spark: default, Magic: 3 options, Legend: all) */
   preferredVoice?: string;
   /** Optional dedication: message + from, shown after cover, before first story page. No illustration, no voice-over. */
@@ -89,6 +95,11 @@ export interface ChildProfile {
   pronouns: string;
   interests: string[];
   appearance?: CharacterAppearance;
+  /** AI-authored reusable visual description for illustrations (not the raw photo). */
+  appearanceDetailedDescription?: string | null;
+  appearanceDetailedDescriptionVersion?: string | null;
+  /** When the saved detailed description was last generated from a photo import. */
+  appearanceDerivedFromPhotoAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

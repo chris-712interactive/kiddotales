@@ -30,6 +30,8 @@ export type TierCapabilities = {
   lessonPackAccess: LessonPackAccess;
   priorityWeight: number;
   commercialUse: boolean;
+  /** Optional child photo upload to generate a detailed reusable character description (transient photo). */
+  photoAppearanceImport: boolean;
 };
 
 function parseNonNegativeIntEnv(value: string | undefined, fallback: number): number {
@@ -88,6 +90,7 @@ function baselineCapabilities(tier: TierId): TierCapabilities {
       lessonPackAccess: "default",
       priorityWeight: 1,
       commercialUse: false,
+      photoAppearanceImport: false,
     };
   }
 
@@ -107,6 +110,7 @@ function baselineCapabilities(tier: TierId): TierCapabilities {
       lessonPackAccess: "default",
       priorityWeight: 2,
       commercialUse: false,
+      photoAppearanceImport: true,
     };
   }
 
@@ -126,6 +130,7 @@ function baselineCapabilities(tier: TierId): TierCapabilities {
       lessonPackAccess: "custom",
       priorityWeight: 3,
       commercialUse: true,
+      photoAppearanceImport: true,
     };
   }
 
@@ -144,6 +149,7 @@ function baselineCapabilities(tier: TierId): TierCapabilities {
     lessonPackAccess: "default",
     priorityWeight: 0,
     commercialUse: false,
+    photoAppearanceImport: false,
   };
 }
 

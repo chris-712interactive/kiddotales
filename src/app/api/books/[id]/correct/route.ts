@@ -30,6 +30,10 @@ function isNameOnlyChange(
   if (!same(meta.artStyle, corrected.artStyle)) return false;
   if (!same(meta.appearance ?? {}, corrected.appearance ?? {})) return false;
   if (!same(meta.dedication ?? null, corrected.dedication ?? null)) return false;
+  if (!same(meta.characterAppearanceDescription ?? "", corrected.characterAppearanceDescription ?? "")) {
+    return false;
+  }
+  if (!same(meta.childProfileId ?? "", corrected.childProfileId ?? "")) return false;
   return meta.childName !== corrected.childName;
 }
 
@@ -159,6 +163,8 @@ export async function POST(
     appearance: appearance ?? meta?.appearance ?? {},
     dedication: meta?.dedication,
     preferredVoice: meta?.preferredVoice,
+    characterAppearanceDescription: meta?.characterAppearanceDescription,
+    childProfileId: meta?.childProfileId,
   };
 
   const lessonCheck = validateLifeLessonForAccess(
@@ -195,12 +201,14 @@ export async function POST(
     const target = book.pages[pageIndex];
     const effectiveArtStyle = corrected.artStyle || "whimsical-watercolor";
     const styleSuffix = getArtStylePrompt(effectiveArtStyle);
-    const characterPrefix = buildAppearancePrefix(
+    const detailedLook = corrected.characterAppearanceDescription?.trim() ?? "";
+    const traitPrefix = buildAppearancePrefix(
       corrected.childName,
       corrected.age,
       corrected.pronouns,
       corrected.appearance
     );
+    const characterPrefix = detailedLook || traitPrefix || null;
     const basePrompt =
       target.illustrationPromptBase ??
       target.imagePrompt ??
@@ -327,6 +335,10 @@ export async function POST(
         appearance: corrected.appearance,
         dedication: corrected.dedication,
         preferredVoice: corrected.preferredVoice,
+        childProfileId: corrected.childProfileId,
+        characterAppearanceDescription: corrected.characterAppearanceDescription?.trim()
+          ? corrected.characterAppearanceDescription.trim().slice(0, 2500)
+          : undefined,
         regenReason: trimmedRegenReason || undefined,
       }),
     });

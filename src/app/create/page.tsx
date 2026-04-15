@@ -25,6 +25,8 @@ import {
   CheckCircle2,
   Lightbulb,
   Eye,
+  Camera,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -165,6 +167,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
     lifeLesson: "bravery",
     artStyle: "whimsical-watercolor",
     appearance: {},
+    characterAppearanceDescription: "",
   },
   {
     childName: "Max",
@@ -174,6 +177,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
     lifeLesson: "friendship",
     artStyle: "pixar-3d",
     appearance: {},
+    characterAppearanceDescription: "",
   },
   {
     childName: "River",
@@ -183,6 +187,7 @@ const SURPRISE_EXAMPLES: CreateFormData[] = [
     lifeLesson: "kindness",
     artStyle: "vibrant-cartoon",
     appearance: {},
+    characterAppearanceDescription: "",
   },
 ];
 
@@ -213,11 +218,18 @@ function CreatePageContent() {
     lifeLesson: "kindness",
     artStyle: "whimsical-watercolor",
     appearance: {},
+    characterAppearanceDescription: "",
     preferredVoice: "none",
     dedication: undefined,
   });
 
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
+  const [photoAppearanceImport, setPhotoAppearanceImport] = useState(false);
+  const [saveAppearanceToProfile, setSaveAppearanceToProfile] = useState(false);
+  const [importFromPhotoBusy, setImportFromPhotoBusy] = useState(false);
+  const [importFromPhotoSession, setImportFromPhotoSession] = useState(false);
+  const createPhotoInputRef = useRef<HTMLInputElement>(null);
+
   const [lessonPackAccess, setLessonPackAccess] =
     useState<LessonPackAccess>("default");
   const [voiceOptions, setVoiceOptions] = useState<string[]>([]);
@@ -269,8 +281,11 @@ function CreatePageContent() {
         lifeLesson: "kindness",
         artStyle: "whimsical-watercolor",
         appearance: {},
+        characterAppearanceDescription: "",
         preferredVoice: form.preferredVoice ?? "none",
       });
+      setSaveAppearanceToProfile(false);
+      setImportFromPhotoSession(false);
       return;
     }
     setSelectedProfileId(profile.id);
@@ -281,6 +296,7 @@ function CreatePageContent() {
       pronouns: profile.pronouns,
       interests: profile.interests ?? [],
       appearance: profile.appearance ?? {},
+      characterAppearanceDescription: profile.appearanceDetailedDescription?.trim() ?? "",
     });
   };
 
@@ -312,6 +328,8 @@ function CreatePageContent() {
     const example =
       SURPRISE_EXAMPLES[Math.floor(Math.random() * SURPRISE_EXAMPLES.length)];
     setForm(example);
+    setImportFromPhotoSession(false);
+    setSaveAppearanceToProfile(false);
     toast.success("Surprise! Form filled with a fun example.");
   };
 
@@ -472,6 +490,9 @@ function CreatePageContent() {
             setLessonPackAccess("default");
           }
           if (Array.isArray(data?.voiceOptions)) setVoiceOptions(data.voiceOptions);
+          if (typeof data?.photoAppearanceImport === "boolean") {
+            setPhotoAppearanceImport(data.photoAppearanceImport);
+          }
           if (Array.isArray(data?.allowedArtStyles) && data.allowedArtStyles.length > 0) {
             setAllowedArtStyles(
               data.allowedArtStyles.filter((id: unknown): id is ArtStyleId =>
@@ -486,6 +507,7 @@ function CreatePageContent() {
         .catch(() => setSettingsFetched(true));
     } else {
       setSubscriptionTier("free");
+      setPhotoAppearanceImport(false);
       setLessonPackAccess("default");
       setVoiceOptions([]);
       setAllowedArtStyles(ALL_ART_STYLE_IDS);
@@ -605,10 +627,43 @@ function CreatePageContent() {
 
     setIsLoading(true);
     try {
+      if (
+        saveAppearanceToProfile &&
+        selectedProfileId &&
+        photoAppearanceImport &&
+        status === "authenticated"
+      ) {
+        const patchBody: Record<string, unknown> = {
+          appearance: form.appearance ?? {},
+          appearanceDetailedDescription:
+            (form.characterAppearanceDescription || "").trim() || null,
+          appearanceDetailedDescriptionVersion: "1",
+        };
+        if (importFromPhotoSession) {
+          patchBody.appearanceDerivedFromPhotoAt = new Date().toISOString();
+        }
+        const pr = await fetch(`/api/child-profiles/${selectedProfileId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patchBody),
+        });
+        const patchJson = (await pr.json().catch(() => ({}))) as { error?: string };
+        if (!pr.ok) {
+          toast.error(patchJson.error || "Could not update child profile.");
+          setIsLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
       const payload = {
         ...form,
         pronouns: resolvedPronouns || form.pronouns,
         lifeLesson: resolvedLifeLesson || form.lifeLesson,
+        childProfileId: selectedProfileId ?? undefined,
+        characterAppearanceDescription: form.characterAppearanceDescription?.trim()
+          ? form.characterAppearanceDescription.trim().slice(0, 2500)
+          : undefined,
       };
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -1102,6 +1157,128 @@ function CreatePageContent() {
                         </label>
                       </div>
                     </div>
+
+                    {photoAppearanceImport && consentChecked && !needsConsent && status === "authenticated" && (
+                      <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
+                        <Label className="text-muted-foreground">Photo import (Magic & Legend)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Upload a clear photo once to generate a detailed look description. The photo is not stored.
+                        </p>
+                        <input
+                          ref={createPhotoInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            void (async () => {
+                              setImportFromPhotoBusy(true);
+                              try {
+                                const fd = new FormData();
+                                fd.append("photo", f);
+                                const res = await fetch("/api/appearance/from-photo", {
+                                  method: "POST",
+                                  body: fd,
+                                });
+                                const data = (await res.json().catch(() => ({}))) as Record<
+                                  string,
+                                  unknown
+                                >;
+                                if (!res.ok) {
+                                  toast.error(
+                                    typeof data.error === "string"
+                                      ? data.error
+                                      : "Could not analyze photo."
+                                  );
+                                  return;
+                                }
+                                const appearance = data.appearance as CreateFormData["appearance"];
+                                const detailed =
+                                  typeof data.detailedCharacterDescription === "string"
+                                    ? data.detailedCharacterDescription.trim().slice(0, 2500)
+                                    : "";
+                                const outfit =
+                                  typeof data.outfitLockSuggestion === "string"
+                                    ? data.outfitLockSuggestion.trim().slice(0, 400)
+                                    : "";
+                                setForm((prev) => ({
+                                  ...prev,
+                                  appearance: {
+                                    ...prev.appearance,
+                                    ...(appearance && typeof appearance === "object" ? appearance : {}),
+                                    ...(outfit ? { outfitLockSuggestion: outfit } : {}),
+                                  },
+                                  characterAppearanceDescription: detailed || prev.characterAppearanceDescription,
+                                }));
+                                setImportFromPhotoSession(true);
+                                toast.success("Photo analyzed. Review the description below.");
+                              } catch {
+                                toast.error("Could not analyze photo.");
+                              } finally {
+                                setImportFromPhotoBusy(false);
+                                if (createPhotoInputRef.current) createPhotoInputRef.current.value = "";
+                              }
+                            })();
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={importFromPhotoBusy}
+                          onClick={() => createPhotoInputRef.current?.click()}
+                          className="touch-manipulation"
+                        >
+                          {importFromPhotoBusy ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                          ) : (
+                            <Camera className="mr-2 size-4" />
+                          )}
+                          Import from photo
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="create-detailed-look">Detailed character look (optional)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Used for consistent illustrations. Write your own or use photo import above.
+                      </p>
+                      <textarea
+                        id="create-detailed-look"
+                        value={form.characterAppearanceDescription ?? ""}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            characterAppearanceDescription: e.target.value.slice(0, 2500),
+                          }))
+                        }
+                        rows={5}
+                        className={cn(
+                          "flex min-h-[120px] w-full rounded-xl border-2 border-input bg-background px-4 py-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        )}
+                        placeholder="Describe your child’s look for the artist…"
+                      />
+                    </div>
+
+                    {selectedProfileId &&
+                      photoAppearanceImport &&
+                      consentChecked &&
+                      !needsConsent &&
+                      status === "authenticated" && (
+                        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card/50 p-3 text-sm touch-manipulation">
+                          <input
+                            type="checkbox"
+                            className="mt-1 size-5 rounded border-muted-foreground/50"
+                            checked={saveAppearanceToProfile}
+                            onChange={(e) => setSaveAppearanceToProfile(e.target.checked)}
+                          />
+                          <span>
+                            Save this look and description to the selected child profile for future books.
+                          </span>
+                        </label>
+                      )}
                   </motion.div>
                 )}
 

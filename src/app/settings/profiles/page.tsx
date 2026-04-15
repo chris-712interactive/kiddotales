@@ -32,6 +32,8 @@ export default function ChildProfilesPage() {
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [maxChildProfiles, setMaxChildProfiles] = useState<number | null>(null);
+  const [photoAppearanceImport, setPhotoAppearanceImport] = useState(false);
+  const [hasParentConsent, setHasParentConsent] = useState(false);
 
   const fetchProfiles = () => {
     fetch("/api/child-profiles")
@@ -40,6 +42,8 @@ export default function ChildProfilesPage() {
         if (!data) {
           setProfiles([]);
           setMaxChildProfiles(null);
+          setPhotoAppearanceImport(false);
+          setHasParentConsent(false);
           return;
         }
         if (Array.isArray(data.profiles)) {
@@ -47,17 +51,25 @@ export default function ChildProfilesPage() {
           setMaxChildProfiles(
             typeof data.maxChildProfiles === "number" ? data.maxChildProfiles : null
           );
+          setPhotoAppearanceImport(Boolean(data.photoAppearanceImport));
+          setHasParentConsent(Boolean(data.hasParentConsent));
         } else if (Array.isArray(data)) {
           setProfiles(data);
           setMaxChildProfiles(null);
+          setPhotoAppearanceImport(false);
+          setHasParentConsent(false);
         } else {
           setProfiles([]);
           setMaxChildProfiles(null);
+          setPhotoAppearanceImport(false);
+          setHasParentConsent(false);
         }
       })
       .catch(() => {
         setProfiles([]);
         setMaxChildProfiles(null);
+        setPhotoAppearanceImport(false);
+        setHasParentConsent(false);
       })
       .finally(() => setLoading(false));
   };
@@ -231,6 +243,11 @@ export default function ChildProfilesPage() {
                         {profile.age} years · {profile.interests?.slice(0, 3).join(", ")}
                         {profile.interests?.length > 3 && "…"}
                       </p>
+                      {profile.appearanceDetailedDescription?.trim() && (
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          Saved look: {profile.appearanceDetailedDescription.trim()}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Link href="/create">
@@ -279,6 +296,8 @@ export default function ChildProfilesPage() {
           profile={modalProfile === "new" ? null : modalProfile}
           onClose={() => setModalProfile(null)}
           onSave={handleSave}
+          photoAppearanceImport={photoAppearanceImport}
+          hasParentConsent={hasParentConsent}
         />
       )}
     </div>

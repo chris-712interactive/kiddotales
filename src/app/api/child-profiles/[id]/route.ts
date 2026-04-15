@@ -21,16 +21,43 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { name, age, pronouns, interests, appearance } =
-    body as Partial<ChildProfile>;
+  const {
+    name,
+    age,
+    pronouns,
+    interests,
+    appearance,
+    appearanceDetailedDescription,
+    appearanceDetailedDescriptionVersion,
+    appearanceDerivedFromPhotoAt,
+  } = body as Partial<ChildProfile>;
 
   const updates: Partial<Omit<ChildProfile, "id" | "createdAt" | "updatedAt">> =
     {};
   if (name !== undefined) updates.name = name;
-  if (age !== undefined) updates.age = age;
+  if (age !== undefined) {
+    const ageNum = typeof age === "number" ? age : typeof age === "string" ? parseInt(age, 10) : NaN;
+    if (!Number.isFinite(ageNum) || ageNum < 1 || ageNum > 12) {
+      return NextResponse.json(
+        { error: "Age must be between 1 and 12." },
+        { status: 400 }
+      );
+    }
+    updates.age = ageNum;
+  }
   if (pronouns !== undefined) updates.pronouns = pronouns;
   if (interests !== undefined) updates.interests = interests;
   if (appearance !== undefined) updates.appearance = appearance;
+  if (appearanceDetailedDescription !== undefined) {
+    updates.appearanceDetailedDescription = appearanceDetailedDescription;
+  }
+  if (appearanceDetailedDescriptionVersion !== undefined) {
+    updates.appearanceDetailedDescriptionVersion =
+      appearanceDetailedDescriptionVersion;
+  }
+  if (appearanceDerivedFromPhotoAt !== undefined) {
+    updates.appearanceDerivedFromPhotoAt = appearanceDerivedFromPhotoAt;
+  }
 
   const profile = await updateChildProfile(id, session.user.id, updates);
   if (!profile) {

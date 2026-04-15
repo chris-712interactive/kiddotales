@@ -956,6 +956,25 @@ export async function runRetentionDeletion(): Promise<{ deletedBooks: number }> 
   return { deletedBooks: deleted };
 }
 
+function mapChildProfileRow(row: Record<string, unknown>): ChildProfile {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    age: Number(row.age) || 5,
+    pronouns: (row.pronouns as string) ?? "they/them",
+    interests: (row.interests as string[]) ?? [],
+    appearance: (row.appearance as ChildProfile["appearance"]) ?? undefined,
+    appearanceDetailedDescription:
+      (row.appearance_detailed_description as string | null) ?? null,
+    appearanceDetailedDescriptionVersion:
+      (row.appearance_detailed_description_version as string | null) ?? null,
+    appearanceDerivedFromPhotoAt:
+      (row.appearance_derived_from_photo_at as string | null) ?? null,
+    createdAt: row.created_at as string | undefined,
+    updatedAt: (row.updated_at as string | undefined) ?? undefined,
+  };
+}
+
 /** Get child profiles for user. */
 export async function getChildProfiles(userId: string): Promise<ChildProfile[]> {
   const supabase = createSupabaseAdmin();
@@ -966,16 +985,23 @@ export async function getChildProfiles(userId: string): Promise<ChildProfile[]> 
     .order("created_at", { ascending: false });
 
   if (error) return [];
-  return (data || []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    age: row.age ?? 5,
-    pronouns: row.pronouns ?? "they/them",
-    interests: (row.interests as string[]) ?? [],
-    appearance: (row.appearance as ChildProfile["appearance"]) ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at ?? undefined,
-  }));
+  return (data || []).map((row) => mapChildProfileRow(row as Record<string, unknown>));
+}
+
+/** Single child profile owned by user, or null. */
+export async function getChildProfileById(
+  userId: string,
+  profileId: string
+): Promise<ChildProfile | null> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("child_profiles")
+    .select("*")
+    .eq("id", profileId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapChildProfileRow(data as Record<string, unknown>);
 }
 
 /** Create child profile. */
@@ -991,6 +1017,10 @@ export async function createChildProfile(
     pronouns: profile.pronouns,
     interests: profile.interests,
     appearance: profile.appearance ?? {},
+    appearance_detailed_description: profile.appearanceDetailedDescription?.trim() || null,
+    appearance_detailed_description_version:
+      profile.appearanceDetailedDescriptionVersion?.trim() || "1",
+    appearance_derived_from_photo_at: profile.appearanceDerivedFromPhotoAt ?? null,
   };
   const { data, error } = await supabase
     .from("child_profiles")
@@ -999,16 +1029,7 @@ export async function createChildProfile(
     .single();
 
   if (error || !data) return null;
-  return {
-    id: data.id,
-    name: data.name,
-    age: data.age ?? 5,
-    pronouns: data.pronouns ?? "they/them",
-    interests: (data.interests as string[]) ?? [],
-    appearance: (data.appearance as ChildProfile["appearance"]) ?? undefined,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at ?? undefined,
-  };
+  return mapChildProfileRow(data as Record<string, unknown>);
 }
 
 /** Update child profile. */
@@ -1024,6 +1045,18 @@ export async function updateChildProfile(
   if (updates.pronouns !== undefined) payload.pronouns = updates.pronouns;
   if (updates.interests !== undefined) payload.interests = updates.interests;
   if (updates.appearance !== undefined) payload.appearance = updates.appearance;
+  if (updates.appearanceDetailedDescription !== undefined) {
+    const v = updates.appearanceDetailedDescription;
+    payload.appearance_detailed_description =
+      typeof v === "string" && v.trim() ? v.trim() : v === null ? null : v;
+  }
+  if (updates.appearanceDetailedDescriptionVersion !== undefined) {
+    payload.appearance_detailed_description_version =
+      updates.appearanceDetailedDescriptionVersion?.trim() || "1";
+  }
+  if (updates.appearanceDerivedFromPhotoAt !== undefined) {
+    payload.appearance_derived_from_photo_at = updates.appearanceDerivedFromPhotoAt;
+  }
 
   const { data, error } = await supabase
     .from("child_profiles")
@@ -1034,16 +1067,7 @@ export async function updateChildProfile(
     .single();
 
   if (error || !data) return null;
-  return {
-    id: data.id,
-    name: data.name,
-    age: data.age ?? 5,
-    pronouns: data.pronouns ?? "they/them",
-    interests: (data.interests as string[]) ?? [],
-    appearance: (data.appearance as ChildProfile["appearance"]) ?? undefined,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at ?? undefined,
-  };
+  return mapChildProfileRow(data as Record<string, unknown>);
 }
 
 /** Delete child profile. */

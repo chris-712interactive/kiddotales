@@ -5,7 +5,7 @@ import {
   getStoryUserPrompt,
 } from "@/lib/constants";
 import { getArtStylePrompt } from "@/lib/art-style-catalog";
-import type { BookData, BookPage, CharacterAppearance } from "@/types";
+import type { BookData, BookPage, CharacterAppearance, ChildProfile } from "@/types";
 import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { auth } from "@/auth";
 import {
@@ -20,6 +20,7 @@ import {
   getUserVoiceCountByPeriod,
   hasBookUsedVoiceSlot,
   updateBookPagesWithAudio,
+  getChildProfileById,
 } from "@/lib/db";
 import {
   getVoiceLimitForTier,
@@ -134,11 +135,15 @@ function buildAppearanceLockSuffix(
   if (a.glasses) parts.push("wearing glasses");
   if (a.freckles) parts.push("freckles");
 
-  const outfitLock = isGirl
-    ? "wearing the exact same outfit in every image: a light pink cardigan over a pastel top, denim bottoms, white socks, and pink sneakers"
-    : isBoy
-      ? "wearing the exact same outfit in every image: a sky-blue tee, denim bottoms, white socks, and blue sneakers"
-      : "wearing the exact same outfit in every image: a pastel tee, denim bottoms, white socks, and sneakers";
+  const customOutfit =
+    typeof a.outfitLockSuggestion === "string" && a.outfitLockSuggestion.trim();
+  const outfitLock = customOutfit
+    ? `wearing the exact same outfit in every image: ${customOutfit.trim()}`
+    : isGirl
+      ? "wearing the exact same outfit in every image: a light pink cardigan over a pastel top, denim bottoms, white socks, and pink sneakers"
+      : isBoy
+        ? "wearing the exact same outfit in every image: a sky-blue tee, denim bottoms, white socks, and blue sneakers"
+        : "wearing the exact same outfit in every image: a pastel tee, denim bottoms, white socks, and sneakers";
 
   return `Appearance lock: ${parts.join(", ")}, human ears, no animal features, ${outfitLock}.`;
 }
@@ -248,7 +253,17 @@ export async function POST(request: NextRequest) {
       preferredVoice,
       dedication,
       regenReason,
-    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string }; regenReason?: string } & typeof body;
+      childProfileId,
+      characterAppearanceDescription,
+    } = body as {
+      updateBookId?: string;
+      appearance?: CharacterAppearance;
+      preferredVoice?: string;
+      dedication?: { message?: string; from?: string };
+      regenReason?: string;
+      childProfileId?: string;
+      characterAppearanceDescription?: string;
+    } & typeof body;
 
     const validation = validateCreatePayload(body);
     if (!validation.ok) {
@@ -261,6 +276,42 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const childProfileIdRaw =
+      typeof childProfileId === "string" ? childProfileId.trim() : "";
+    const sessionCharDesc =
+      typeof characterAppearanceDescription === "string"
+        ? characterAppearanceDescription.trim().slice(0, 2500)
+        : "";
+
+    let loadedProfile: ChildProfile | null = null;
+    if (childProfileIdRaw) {
+      if (!supabaseReady) {
+        return NextResponse.json(
+          { error: "Child profiles require an account with storage enabled." },
+          { status: 400 }
+        );
+      }
+      loadedProfile = await getChildProfileById(userId, childProfileIdRaw);
+      if (!loadedProfile) {
+        return NextResponse.json({ error: "Child profile not found." }, { status: 404 });
+      }
+    }
+
+    const fromProfileAppearance =
+      loadedProfile?.appearance && typeof loadedProfile.appearance === "object"
+        ? loadedProfile.appearance
+        : {};
+    const fromBodyAppearance =
+      appearance && typeof appearance === "object" ? appearance : {};
+    const mergedAppearance = { ...fromProfileAppearance, ...fromBodyAppearance };
+    const effectiveAppearance: CharacterAppearance | undefined =
+      Object.keys(mergedAppearance).length > 0
+        ? (mergedAppearance as CharacterAppearance)
+        : undefined;
+
+    const profileCharDesc = loadedProfile?.appearanceDetailedDescription?.trim() ?? "";
+    const parentCharacterLock = sessionCharDesc || profileCharDesc;
 
     const isCorrection = Boolean(updateBookId);
     if (supabaseReady && familyPlan) {
@@ -331,8 +382,10 @@ export async function POST(request: NextRequest) {
       Array.isArray(interests) ? interests.join(" ") : "",
       lifeLesson || "",
       typeof regenReason === "string" ? regenReason : "",
-      typeof appearance === "object" && appearance
-        ? JSON.stringify(appearance)
+      sessionCharDesc,
+      profileCharDesc,
+      typeof effectiveAppearance === "object" && effectiveAppearance
+        ? JSON.stringify(effectiveAppearance)
         : "",
     ]
       .filter(Boolean)
@@ -365,11 +418,19 @@ export async function POST(request: NextRequest) {
       interests,
       lifeLesson: lifeLesson || "kindness",
       artStyle: artStyle || "whimsical-watercolor",
-      appearance,
+      appearance: effectiveAppearance,
     });
+    const visualAnchor =
+      parentCharacterLock.length > 2200
+        ? `${parentCharacterLock.slice(0, 2200)}…`
+        : parentCharacterLock;
+    const visualAnchorBlock = visualAnchor
+      ? `\n\nParent-provided visual reference for the main character (keep JSON characterDescription aligned with this look; authoritative for illustrations): ${visualAnchor}`
+      : "";
+    const userPromptBase = `${baseUserPrompt}${visualAnchorBlock}`;
     const userPrompt = trimmedRegenReason
-      ? `${baseUserPrompt}\n\nParent feedback for this regeneration (highest priority to address while keeping the story cozy and age-appropriate): ${trimmedRegenReason}`
-      : baseUserPrompt;
+      ? `${userPromptBase}\n\nParent feedback for this regeneration (highest priority to address while keeping the story cozy and age-appropriate): ${trimmedRegenReason}`
+      : userPromptBase;
 
     const systemPrompt = STORY_SYSTEM_PROMPT
       .replace("[AGE]", String(age || 5))
@@ -448,11 +509,15 @@ export async function POST(request: NextRequest) {
 
     // Character consistency: prepend same description to every image prompt
     // Parent-selected appearance overrides GPT's characterDescription when provided
-    const appearanceLockSuffix = buildAppearanceLockSuffix(pronouns || "", appearance);
+    const appearanceLockSuffix = buildAppearanceLockSuffix(
+      pronouns || "",
+      effectiveAppearance
+    );
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
     let characterPrefix =
+      (parentCharacterLock && parentCharacterLock.trim()) ||
       parsed.characterDescription?.trim() ||
       `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features, wearing the exact same outfit in every image: a pastel top, denim bottoms, white socks, and sneakers.`;
 
@@ -655,9 +720,11 @@ export async function POST(request: NextRequest) {
           interests: interests || [],
           lifeLesson: lifeLesson || "kindness",
           artStyle: artStyle || "whimsical-watercolor",
-          appearance: appearance || {},
+          appearance: effectiveAppearance || appearance || {},
           preferredVoice: preferredVoice && preferredVoice !== "none" ? preferredVoice : "none",
           dedication: dedicationData ?? undefined,
+          childProfileId: childProfileIdRaw || undefined,
+          characterAppearanceDescription: sessionCharDesc || undefined,
         };
 
         const subscriptionTierAtCreation = featureTier;

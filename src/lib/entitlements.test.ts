@@ -18,6 +18,7 @@ function testEntitlementsSnapshotByTier() {
   assert.equal(free.lessonPackAccess, "default");
   assert.equal(free.priorityWeight, 0);
   assert.equal(free.commercialUse, false);
+  assert.equal(free.photoAppearanceImport, false);
 
   assert.equal(spark.tier, "spark");
   assert.equal(spark.bookLimitPeriod, "monthly");
@@ -30,6 +31,7 @@ function testEntitlementsSnapshotByTier() {
   assert.equal(spark.lessonPackAccess, "default");
   assert.equal(spark.priorityWeight, 1);
   assert.equal(spark.commercialUse, false);
+  assert.equal(spark.photoAppearanceImport, false);
 
   assert.equal(magic.tier, "magic");
   assert.equal(magic.bookLimitPeriod, "monthly");
@@ -42,6 +44,7 @@ function testEntitlementsSnapshotByTier() {
   assert.equal(magic.lessonPackAccess, "default");
   assert.equal(magic.priorityWeight, 2);
   assert.equal(magic.commercialUse, false);
+  assert.equal(magic.photoAppearanceImport, true);
 
   assert.equal(legend.tier, "legend");
   assert.equal(legend.bookLimitPeriod, "monthly");
@@ -54,6 +57,7 @@ function testEntitlementsSnapshotByTier() {
   assert.equal(legend.lessonPackAccess, "custom");
   assert.equal(legend.priorityWeight, 3);
   assert.equal(legend.commercialUse, true);
+  assert.equal(legend.photoAppearanceImport, true);
 }
 
 function testUnknownTierNormalizesToFree() {

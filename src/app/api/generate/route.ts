@@ -516,6 +516,11 @@ export async function POST(request: NextRequest) {
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
+    const normalizedAge = Math.min(12, Math.max(1, Number(age || 5)));
+    const ageScaleLockSuffix =
+      normalizedAge >= 10
+        ? ` Age lock: depict the child with clearly ${normalizedAge}-year-old preteen proportions, height, and limb length; do not make the child look younger.`
+        : ` Age lock: depict the child with clearly ${normalizedAge}-year-old child proportions, height, and limb length appropriate for that exact age.`;
     let characterPrefix =
       (parentCharacterLock && parentCharacterLock.trim()) ||
       parsed.characterDescription?.trim() ||
@@ -524,6 +529,7 @@ export async function POST(request: NextRequest) {
     if (appearanceLockSuffix) {
       characterPrefix = `${characterPrefix} ${appearanceLockSuffix}`;
     }
+    characterPrefix = `${characterPrefix}${ageScaleLockSuffix}`;
 
     if (isPhotoRealistic) {
       characterPrefix =

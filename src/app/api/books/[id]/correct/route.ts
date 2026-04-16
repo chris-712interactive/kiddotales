@@ -208,7 +208,15 @@ export async function POST(
       corrected.pronouns,
       corrected.appearance
     );
-    const characterPrefix = detailedLook || traitPrefix || null;
+    const normalizedAge = Math.min(12, Math.max(1, Number(corrected.age || 5)));
+    const ageScaleLockSuffix =
+      normalizedAge >= 10
+        ? ` Age lock: depict the child with clearly ${normalizedAge}-year-old preteen proportions, height, and limb length; do not make the child look younger.`
+        : ` Age lock: depict the child with clearly ${normalizedAge}-year-old child proportions, height, and limb length appropriate for that exact age.`;
+    const characterPrefixBase = detailedLook || traitPrefix || null;
+    const characterPrefix = characterPrefixBase
+      ? `${characterPrefixBase}${ageScaleLockSuffix}`
+      : null;
     const basePrompt =
       target.illustrationPromptBase ??
       target.imagePrompt ??

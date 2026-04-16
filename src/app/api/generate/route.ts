@@ -35,6 +35,11 @@ import {
 import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
+import {
+  normalizeScenePromptForWardrobe,
+  buildAppearanceLockSuffix,
+  buildTraitLockSuffix,
+} from "@/lib/illustration-prompt-lock";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -95,57 +100,6 @@ function resolveBaseSeed(input: string): number {
     if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return hashStringToSeed(input);
-}
-
-function normalizeScenePromptForWardrobe(scenePrompt: string): string {
-  if (!scenePrompt) return "";
-  const clothingPattern =
-    /\b(outfit|wearing|wears|dressed|dress|shirt|t-?shirt|sweater|hoodie|jacket|coat|cardigan|jeans|pants|trousers|shorts|skirt|leggings|shoes|sneakers|boots|sandals|pajamas|costume|uniform)\b/i;
-  const sentenceSplit = scenePrompt
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const kept = sentenceSplit.filter((s) => !clothingPattern.test(s));
-  const normalized = (kept.length ? kept : sentenceSplit).join(" ");
-  return normalized.trim();
-}
-
-/** Builds appearance-lock suffix from optional parent-selected appearance. */
-function buildAppearanceLockSuffix(
-  pronouns: string,
-  appearance?: CharacterAppearance
-): string | null {
-  if (!appearance || typeof appearance !== "object") return null;
-  const a = appearance as Record<string, unknown>;
-  const hasAny =
-    a.hairColor || a.hairStyle || a.skinTone || a.eyeColor || a.glasses || a.freckles;
-  if (!hasAny) return null;
-
-  const isGirl = /she\/her|girl/i.test(pronouns);
-  const isBoy = /he\/him|boy/i.test(pronouns);
-  const parts: string[] = [];
-
-  const hair: string[] = [];
-  if (a.hairColor && typeof a.hairColor === "string") hair.push(a.hairColor);
-  if (a.hairStyle && typeof a.hairStyle === "string") hair.push(a.hairStyle);
-  if (hair.length) parts.push(`${hair.join(" ")} hair`);
-
-  if (a.skinTone && typeof a.skinTone === "string") parts.push(`${a.skinTone} skin`);
-  if (a.eyeColor && typeof a.eyeColor === "string") parts.push(`${a.eyeColor} eyes`);
-  if (a.glasses) parts.push("wearing glasses");
-  if (a.freckles) parts.push("freckles");
-
-  const customOutfit =
-    typeof a.outfitLockSuggestion === "string" && a.outfitLockSuggestion.trim();
-  const outfitLock = customOutfit
-    ? `wearing the exact same outfit in every image: ${customOutfit.trim()}`
-    : isGirl
-      ? "wearing the exact same outfit in every image: a light pink cardigan over a pastel top, denim bottoms, white socks, and pink sneakers"
-      : isBoy
-        ? "wearing the exact same outfit in every image: a sky-blue tee, denim bottoms, white socks, and blue sneakers"
-        : "wearing the exact same outfit in every image: a pastel tee, denim bottoms, white socks, and sneakers";
-
-  return `Appearance lock: ${parts.join(", ")}, human ears, no animal features, ${outfitLock}.`;
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -491,6 +445,8 @@ export async function POST(request: NextRequest) {
       coverImagePrompt?: string;
       characterDescription?: string;
       secondaryCharacterDescription?: string | null;
+      /** Story-canon modest outfit; verbatim wardrobe lock for every image when present. */
+      illustrationOutfitLock?: string;
     };
     try {
       parsed = JSON.parse(content);
@@ -507,12 +463,18 @@ export async function POST(request: NextRequest) {
     const styleSuffix = getArtStylePrompt(artStyle);
     const isPhotoRealistic = artStyle === "photo-realistic";
 
-    // Character consistency: prepend same description to every image prompt
-    // Parent-selected appearance overrides GPT's characterDescription when provided
-    const appearanceLockSuffix = buildAppearanceLockSuffix(
-      pronouns || "",
-      effectiveAppearance
-    );
+    const storyOutfit =
+      typeof parsed.illustrationOutfitLock === "string"
+        ? parsed.illustrationOutfitLock.trim().slice(0, 1200)
+        : "";
+
+    // Character consistency: prepend same description to every image prompt.
+    // When the model returns illustrationOutfitLock, traits come from appearance lock only
+    // (no default outfit paragraph) so the story-canon outfit is the single wardrobe source.
+    const appearanceLockSuffix = storyOutfit
+      ? buildTraitLockSuffix(effectiveAppearance)
+      : buildAppearanceLockSuffix(pronouns || "", effectiveAppearance);
+
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
@@ -524,7 +486,9 @@ export async function POST(request: NextRequest) {
     let characterPrefix =
       (parentCharacterLock && parentCharacterLock.trim()) ||
       parsed.characterDescription?.trim() ||
-      `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features, wearing the exact same outfit in every image: a pastel top, denim bottoms, white socks, and sneakers.`;
+      (storyOutfit
+        ? `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features.`
+        : `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features, wearing the exact same outfit in every image: a pastel top, denim bottoms, white socks, and sneakers.`);
 
     if (appearanceLockSuffix) {
       characterPrefix = `${characterPrefix} ${appearanceLockSuffix}`;
@@ -537,8 +501,9 @@ export async function POST(request: NextRequest) {
         " Realistic skin texture, natural skin tones, lifelike hair detail, soft diffused natural lighting on face, photorealistic child portrait quality.";
     }
 
-    const wardrobeLockSuffix =
-      " Wardrobe lock: the child must keep the exact same clothing, colors, layers, footwear, and accessories in the cover and every page. No outfit changes.";
+    const wardrobeLockSuffix = storyOutfit
+      ? ` Wardrobe lock (story-canon outfit, identical on cover and every page): ${storyOutfit.trim()}. Same garments, colors, layers, footwear, and accessories everywhere. No alternate outfits, seasonal changes, or costume swaps.`
+      : " Wardrobe lock: the child must keep the exact same clothing, colors, layers, footwear, and accessories in the cover and every page. No outfit changes.";
     const wardrobeReminder = " Use the exact same locked outfit for the child in this scene.";
 
     const secondaryChar =
@@ -731,6 +696,7 @@ export async function POST(request: NextRequest) {
           dedication: dedicationData ?? undefined,
           childProfileId: childProfileIdRaw || undefined,
           characterAppearanceDescription: sessionCharDesc || undefined,
+          illustrationOutfitLock: storyOutfit || undefined,
         };
 
         const subscriptionTierAtCreation = featureTier;

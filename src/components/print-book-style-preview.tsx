@@ -98,7 +98,7 @@ export function PrintBookStylePreview({
                 </div>
               )}
             </div>
-            <div className="flex flex-1 flex-col justify-center bg-[#fffef8] p-2 sm:p-3 dark:bg-[#1c1b18]">
+            <div className="flex flex-1 flex-col justify-center bg-[#ffffff] p-2 sm:p-3">
               {hasDedication && (
                 <p className="mb-1 text-[9px] italic text-muted-foreground">
                   Story preview (dedication not shown)

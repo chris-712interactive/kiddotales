@@ -18,6 +18,8 @@ const HAIR_STYLE_VALUES = new Set([
 ]);
 const SKIN_VALUES = new Set(["light", "medium", "tan", "brown", "dark"]);
 const EYE_VALUES = new Set(["blue", "brown", "green", "hazel"]);
+const CLOTHING_PATTERN =
+  /\b(outfit|wearing|wears|dressed|dress|shirt|t-?shirt|sweater|hoodie|jacket|coat|cardigan|jeans|pants|trousers|shorts|skirt|leggings|shoes|sneakers|boots|sandals|pajamas|uniform|fabric|sleeve|collar|neckline)\b/i;
 
 function pickEnum(raw: unknown, allowed: Set<string>): string | undefined {
   if (typeof raw !== "string") return undefined;
@@ -27,10 +29,19 @@ function pickEnum(raw: unknown, allowed: Set<string>): string | undefined {
   return undefined;
 }
 
+function stripClothingContent(input: string): string {
+  const sentences = input
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const kept = sentences.filter((s) => !CLOTHING_PATTERN.test(s));
+  const normalized = (kept.length ? kept : sentences).join(" ").trim();
+  return normalized.slice(0, 2500);
+}
+
 export type PhotoAppearanceAnalysis = {
   appearance: CharacterAppearance;
   detailedCharacterDescription: string;
-  outfitLockSuggestion: string;
   confidence: "high" | "medium" | "low";
   warnings: string[];
 };
@@ -47,22 +58,13 @@ export function sanitizePhotoAnalysisJson(parsed: unknown): PhotoAppearanceAnaly
     eyeColor: pickEnum(app.eyeColor, EYE_VALUES),
     glasses: app.glasses === true,
     freckles: app.freckles === true,
-    outfitLockSuggestion:
-      typeof app.outfitLockSuggestion === "string"
-        ? app.outfitLockSuggestion.trim().slice(0, 400) || undefined
-        : undefined,
   };
 
   const detailed =
     typeof o.detailedCharacterDescription === "string"
-      ? o.detailedCharacterDescription.trim().slice(0, 2500)
+      ? stripClothingContent(o.detailedCharacterDescription.trim())
       : "";
   if (!detailed) return null;
-
-  const outfitLockSuggestion =
-    typeof o.outfitLockSuggestion === "string"
-      ? o.outfitLockSuggestion.trim().slice(0, 400)
-      : appearance.outfitLockSuggestion?.trim() ?? "";
 
   const conf = o.confidence === "high" || o.confidence === "medium" || o.confidence === "low" ? o.confidence : "medium";
   const warnings = Array.isArray(o.warnings)
@@ -72,7 +74,6 @@ export function sanitizePhotoAnalysisJson(parsed: unknown): PhotoAppearanceAnaly
   return {
     appearance,
     detailedCharacterDescription: detailed,
-    outfitLockSuggestion,
     confidence: conf,
     warnings,
   };

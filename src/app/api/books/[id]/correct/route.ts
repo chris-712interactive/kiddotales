@@ -13,6 +13,10 @@ import Replicate from "replicate";
 import { getTierCapabilities } from "@/lib/entitlements";
 import { resolveFamilyPlanContext } from "@/lib/family-sharing";
 import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
+import {
+  normalizeScenePromptForWardrobe,
+  buildTraitLockSuffix,
+} from "@/lib/illustration-prompt-lock";
 import type { CreationMetadata, CharacterAppearance } from "@/types";
 
 /** Compare form data with metadata. Returns true if only childName changed. */
@@ -34,6 +38,9 @@ function isNameOnlyChange(
     return false;
   }
   if (!same(meta.childProfileId ?? "", corrected.childProfileId ?? "")) return false;
+  if (!same(meta.illustrationOutfitLock ?? "", corrected.illustrationOutfitLock ?? "")) {
+    return false;
+  }
   return meta.childName !== corrected.childName;
 }
 
@@ -165,6 +172,7 @@ export async function POST(
     preferredVoice: meta?.preferredVoice,
     characterAppearanceDescription: meta?.characterAppearanceDescription,
     childProfileId: meta?.childProfileId,
+    illustrationOutfitLock: meta?.illustrationOutfitLock,
   };
 
   const lessonCheck = validateLifeLessonForAccess(
@@ -201,6 +209,11 @@ export async function POST(
     const target = book.pages[pageIndex];
     const effectiveArtStyle = corrected.artStyle || "whimsical-watercolor";
     const styleSuffix = getArtStylePrompt(effectiveArtStyle);
+    const storyOutfit =
+      typeof corrected.illustrationOutfitLock === "string"
+        ? corrected.illustrationOutfitLock.trim().slice(0, 1200)
+        : "";
+
     const detailedLook = corrected.characterAppearanceDescription?.trim() ?? "";
     const traitPrefix = buildAppearancePrefix(
       corrected.childName,
@@ -213,17 +226,33 @@ export async function POST(
       normalizedAge >= 10
         ? ` Age lock: depict the child with clearly ${normalizedAge}-year-old preteen proportions, height, and limb length; do not make the child look younger.`
         : ` Age lock: depict the child with clearly ${normalizedAge}-year-old child proportions, height, and limb length appropriate for that exact age.`;
-    const characterPrefixBase = detailedLook || traitPrefix || null;
+
+    let characterPrefixBase = detailedLook || traitPrefix || null;
+    const traitLockOnly = storyOutfit ? buildTraitLockSuffix(corrected.appearance) : null;
+    if (traitLockOnly) {
+      characterPrefixBase = characterPrefixBase
+        ? `${characterPrefixBase} ${traitLockOnly}`
+        : traitLockOnly;
+    }
     const characterPrefix = characterPrefixBase
       ? `${characterPrefixBase}${ageScaleLockSuffix}`
       : null;
-    const basePrompt =
+
+    const wardrobeReminder = " Use the exact same locked outfit for the child in this scene.";
+    const rawBase =
       target.illustrationPromptBase ??
       target.imagePrompt ??
       `${target.text}. Children's book illustration.`;
-    const prompt = characterPrefix
-      ? `${characterPrefix}. ${basePrompt}. ${styleSuffix}`
-      : `${basePrompt}. ${styleSuffix}`;
+    const basePrompt = `${normalizeScenePromptForWardrobe(rawBase)}${wardrobeReminder}`;
+
+    const storyWardrobe = storyOutfit
+      ? `Wardrobe lock (story-canon outfit, identical on cover and every page): ${storyOutfit.trim()}. Same garments, colors, layers, footwear, and accessories everywhere. No alternate outfits, seasonal changes, or costume swaps.`
+      : "";
+
+    const prompt =
+      characterPrefix || storyWardrobe
+        ? `${[characterPrefix, storyWardrobe].filter(Boolean).join(" ")}. ${basePrompt}. ${styleSuffix}`
+        : `${basePrompt}. ${styleSuffix}`;
     const finalPrompt = trimmedRegenReason
       ? `${prompt}. Parent requested change for this page: ${trimmedRegenReason}`
       : prompt;

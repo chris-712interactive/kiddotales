@@ -83,6 +83,8 @@ export interface CreateFormData {
   dedication?: Dedication;
   /** Optional print-cover title layout override chosen by user. */
   printCoverTitleLayout?: PrintCoverTitleLayout;
+  /** Story-canon modest outfit paragraph saved at generation for consistent regen prompts. */
+  illustrationOutfitLock?: string;
 }
 
 /** Stored with each book for correction flow */

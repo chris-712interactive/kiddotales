@@ -1198,16 +1198,11 @@ function CreatePageContent() {
                                   typeof data.detailedCharacterDescription === "string"
                                     ? data.detailedCharacterDescription.trim().slice(0, 2500)
                                     : "";
-                                const outfit =
-                                  typeof data.outfitLockSuggestion === "string"
-                                    ? data.outfitLockSuggestion.trim().slice(0, 400)
-                                    : "";
                                 setForm((prev) => ({
                                   ...prev,
                                   appearance: {
                                     ...prev.appearance,
                                     ...(appearance && typeof appearance === "object" ? appearance : {}),
-                                    ...(outfit ? { outfitLockSuggestion: outfit } : {}),
                                   },
                                   characterAppearanceDescription: detailed || prev.characterAppearanceDescription,
                                 }));

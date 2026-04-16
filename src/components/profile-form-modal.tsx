@@ -108,14 +108,11 @@ export function ProfileFormModal({
       }
       const appearance = data.appearance as ProfileFormData["appearance"];
       const detailed = typeof data.detailedCharacterDescription === "string" ? data.detailedCharacterDescription : "";
-      const outfit =
-        typeof data.outfitLockSuggestion === "string" ? data.outfitLockSuggestion.trim() : "";
       setForm((prev) => ({
         ...prev,
         appearance: {
           ...prev.appearance,
           ...(appearance && typeof appearance === "object" ? appearance : {}),
-          ...(outfit ? { outfitLockSuggestion: outfit.slice(0, 400) } : {}),
         },
       }));
       if (detailed.trim()) setDetailedDescription(detailed.trim().slice(0, 2500));

@@ -42,15 +42,13 @@ Return ONLY valid JSON with this exact shape (no markdown):
     "skinTone": "one of: light, medium, tan, brown, dark or omit",
     "eyeColor": "one of: blue, brown, green, hazel or omit",
     "glasses": true/false,
-    "freckles": true/false,
-    "outfitLockSuggestion": "short phrase describing visible everyday clothing for consistent illustrations, modest and age-appropriate"
+    "freckles": true/false
   },
-  "detailedCharacterDescription": "2-4 sentences: human child, face shape, hair, eyes, skin, build, visible clothing colors and layers. No name. No diagnosis. G-rated. Suitable to prepend to every illustration prompt.",
-  "outfitLockSuggestion": "same as appearance.outfitLockSuggestion or a slightly fuller phrase",
+  "detailedCharacterDescription": "4-7 sentences, maximum detail, STRICTLY shoulders-up only. Describe only head/face/neck-visible traits: head shape, face shape, forehead, eyebrows, eye shape and spacing, eyelashes, nose shape, lips/smile, cheeks, chin/jawline, ear visibility, freckles/moles if visible, hairline/part/texture/length around face, skin tone nuance, glasses details if present, and overall expression. Exclude clothing details entirely. Do not mention shirt, jacket, colors of clothes, neckline, fabric, or accessories below the neck. No name. No diagnosis. G-rated. Suitable to prepend to every illustration prompt.",
   "confidence": "high" | "medium" | "low",
   "warnings": ["optional short notes e.g. face partially obscured"]
 }
-Rules: Never guess medical conditions. If the face is not visible or photo is not a child, set confidence low and explain in warnings. Do not include any text outside the JSON.`;
+Rules: Never guess medical conditions. If the face is not visible or photo is not a child, set confidence low and explain in warnings. Focus on facial identity cues. Do not include any text outside the JSON.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -158,10 +156,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const mod = await openai.moderations.create({
-        input: [
-          sanitized.detailedCharacterDescription,
-          sanitized.outfitLockSuggestion,
-        ].join("\n"),
+        input: sanitized.detailedCharacterDescription,
         model: "text-moderation-latest",
       });
       if (mod.results?.[0]?.flagged) {

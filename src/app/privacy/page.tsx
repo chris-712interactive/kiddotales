@@ -43,6 +43,11 @@ export default function PrivacyPage() {
               <li><strong>Child&apos;s age</strong> – for age-appropriate content</li>
               <li><strong>Child&apos;s interests</strong> – to personalize the story</li>
               <li><strong>Optional appearance details</strong> – hair color, skin tone, etc., for illustrations</li>
+              <li>
+                <strong>Optional child photo (Magic & Legend)</strong> – if you choose to upload a reference
+                photo, we send it to our AI provider only to generate a written character description for
+                consistent illustrations. The photo itself is not retained after processing.
+              </li>
               <li><strong>Life lesson</strong> – the theme you choose for the story</li>
               <li><strong>Generated content</strong> – story text, AI-generated illustrations, and optional AI voice narration</li>
             </ul>
@@ -72,7 +77,7 @@ export default function PrivacyPage() {
               To provide our service, we share child information with:
             </p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li><strong>OpenAI</strong> – to generate story text and AI voice narration (text-to-speech). Child name, age, interests, and appearance are sent to OpenAI. See <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">OpenAI&apos;s Privacy Policy</a>.</li>
+              <li><strong>OpenAI</strong> – to generate story text and AI voice narration (text-to-speech), and when you use optional photo import (paid plans), to analyze a reference photo once to produce a written character description. Child name, age, interests, appearance, and optional photo data are sent only as needed for these features. See <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">OpenAI&apos;s Privacy Policy</a>.</li>
               <li><strong>Replicate</strong> – to generate story illustrations. See <a href="https://replicate.com/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Replicate&apos;s Terms</a>.</li>
               <li><strong>Supabase</strong> – to store your books and account data securely.</li>
               <li><strong>Google</strong> – for sign-in authentication.</li>

@@ -32,11 +32,6 @@ export function AuthButtons({ variant = "default", setOpen }: AuthButtonsProps) 
     if (variant === "drawer") {
       return (
         <div className="flex w-full flex-col gap-1">
-          <div className="flex items-center gap-2 px-2 py-1">
-            <span className="truncate text-sm text-muted-foreground">
-              {session.user.email}
-            </span>
-          </div>
           <Link href="/notifications" className="block w-full" onClick={() => setOpen?.(false)}>
             <Button variant="ghost" className="w-full justify-start">
               <Bell className="mr-2 size-4" />

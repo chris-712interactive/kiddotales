@@ -56,7 +56,7 @@ export const getStoryUserPrompt = (params: {
   if (params.appearance?.freckles) appearanceParts.push("freckles");
   const appearanceLine =
     appearanceParts.length > 0
-      ? `\n- Character appearance (use in characterDescription): ${appearanceParts.join(", ")}`
+      ? `\n- Character appearance (use in characterDescription for face/hair/build only; put all clothing in illustrationOutfitLock): ${appearanceParts.join(", ")}`
       : "";
   const photoRealisticHint =
     params.artStyle === "photo-realistic"
@@ -72,7 +72,7 @@ export const getStoryUserPrompt = (params: {
 - Life lesson to teach: ${params.lifeLesson}
 - Art style for images: ${styleSpec.label} — ${styleSpec.description}. Rendering direction: ${styleSpec.promptDescriptor}${appearanceLine}${photoRealisticHint}
 
-Generate the complete story as JSON. Remember: exactly 8 pages, each with text and a detailed imagePrompt.
+Generate the complete story as JSON. Remember: exactly 8 pages, each with text and illustrationPromptBase; include illustrationOutfitLock as one detailed story-appropriate outfit for the whole book; do not invent different clothes per page in illustrationPromptBase.
 
 Content must stay innocent for ages 3-10: no adult, romantic, or sexual themes; no gender-transition or sexuality topics; illustration prompts must show everyone fully modestly clothed (no nudity, bathing, or undressing scenes).`;
 };

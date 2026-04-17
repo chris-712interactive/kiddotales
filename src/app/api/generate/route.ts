@@ -5,7 +5,7 @@ import {
   getStoryUserPrompt,
 } from "@/lib/constants";
 import { getArtStylePrompt } from "@/lib/art-style-catalog";
-import type { BookData, BookPage, CharacterAppearance } from "@/types";
+import type { BookData, BookPage, CharacterAppearance, ChildProfile } from "@/types";
 import { STORY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { auth } from "@/auth";
 import {
@@ -20,6 +20,7 @@ import {
   getUserVoiceCountByPeriod,
   hasBookUsedVoiceSlot,
   updateBookPagesWithAudio,
+  getChildProfileById,
 } from "@/lib/db";
 import {
   getVoiceLimitForTier,
@@ -34,6 +35,11 @@ import {
 import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
+import {
+  normalizeScenePromptForWardrobe,
+  buildAppearanceLockSuffix,
+  buildTraitLockSuffix,
+} from "@/lib/illustration-prompt-lock";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -67,48 +73,33 @@ function replicateFluxSafetyTolerance(): number {
   return Math.min(5, Math.max(1, n));
 }
 
-function replicateFluxProImageInput(prompt: string) {
+function replicateFluxProImageInput(prompt: string, seed?: number) {
   return {
     prompt,
     output_format: "png" as const,
     aspect_ratio: "4:5" as const,
     resolution: REPLICATE_FLUX_IMAGE_RESOLUTION,
     safety_tolerance: replicateFluxSafetyTolerance(),
+    ...(typeof seed === "number" ? { seed } : {}),
   };
 }
 
-/** Builds character description from optional parent-selected appearance. */
-function buildAppearancePrefix(
-  childName: string,
-  age: number,
-  pronouns: string,
-  appearance?: CharacterAppearance
-): string | null {
-  if (!appearance || typeof appearance !== "object") return null;
-  const a = appearance as Record<string, unknown>;
-  const hasAny =
-    a.hairColor || a.hairStyle || a.skinTone || a.eyeColor || a.glasses || a.freckles;
-  if (!hasAny) return null;
+function hashStringToSeed(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0;
+  }
+  // Keep seed within a positive 31-bit range.
+  return Math.abs(hash) % 2_147_483_647;
+}
 
-  const isGirl = /she\/her|girl/i.test(pronouns || "");
-  const isBoy = /he\/him|boy/i.test(pronouns || "");
-  const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
-  const parts: string[] = [`A ${age}-year-old ${genderPhrase} named ${childName}`];
-
-  const hair: string[] = [];
-  if (a.hairColor && typeof a.hairColor === "string") hair.push(a.hairColor);
-  if (a.hairStyle && typeof a.hairStyle === "string") hair.push(a.hairStyle);
-  if (hair.length) parts.push(`${hair.join(" ")} hair`);
-
-  if (a.skinTone && typeof a.skinTone === "string") parts.push(`${a.skinTone} skin`);
-  if (a.eyeColor && typeof a.eyeColor === "string") parts.push(`${a.eyeColor} eyes`);
-  if (a.glasses) parts.push("wearing glasses");
-  if (a.freckles) parts.push("freckles");
-
-  return (
-    parts.join(", ") +
-    ", human ears, no animal features, modest age-appropriate fully clothed outfit, children's book illustration style."
-  );
+function resolveBaseSeed(input: string): number {
+  const envSeedRaw = process.env.REPLICATE_FLUX_SEED?.trim();
+  if (envSeedRaw) {
+    const parsed = parseInt(envSeedRaw, 10);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return hashStringToSeed(input);
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -216,7 +207,17 @@ export async function POST(request: NextRequest) {
       preferredVoice,
       dedication,
       regenReason,
-    } = body as { updateBookId?: string; appearance?: CharacterAppearance; preferredVoice?: string; dedication?: { message?: string; from?: string }; regenReason?: string } & typeof body;
+      childProfileId,
+      characterAppearanceDescription,
+    } = body as {
+      updateBookId?: string;
+      appearance?: CharacterAppearance;
+      preferredVoice?: string;
+      dedication?: { message?: string; from?: string };
+      regenReason?: string;
+      childProfileId?: string;
+      characterAppearanceDescription?: string;
+    } & typeof body;
 
     const validation = validateCreatePayload(body);
     if (!validation.ok) {
@@ -229,6 +230,42 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const childProfileIdRaw =
+      typeof childProfileId === "string" ? childProfileId.trim() : "";
+    const sessionCharDesc =
+      typeof characterAppearanceDescription === "string"
+        ? characterAppearanceDescription.trim().slice(0, 2500)
+        : "";
+
+    let loadedProfile: ChildProfile | null = null;
+    if (childProfileIdRaw) {
+      if (!supabaseReady) {
+        return NextResponse.json(
+          { error: "Child profiles require an account with storage enabled." },
+          { status: 400 }
+        );
+      }
+      loadedProfile = await getChildProfileById(userId, childProfileIdRaw);
+      if (!loadedProfile) {
+        return NextResponse.json({ error: "Child profile not found." }, { status: 404 });
+      }
+    }
+
+    const fromProfileAppearance =
+      loadedProfile?.appearance && typeof loadedProfile.appearance === "object"
+        ? loadedProfile.appearance
+        : {};
+    const fromBodyAppearance =
+      appearance && typeof appearance === "object" ? appearance : {};
+    const mergedAppearance = { ...fromProfileAppearance, ...fromBodyAppearance };
+    const effectiveAppearance: CharacterAppearance | undefined =
+      Object.keys(mergedAppearance).length > 0
+        ? (mergedAppearance as CharacterAppearance)
+        : undefined;
+
+    const profileCharDesc = loadedProfile?.appearanceDetailedDescription?.trim() ?? "";
+    const parentCharacterLock = sessionCharDesc || profileCharDesc;
 
     const isCorrection = Boolean(updateBookId);
     if (supabaseReady && familyPlan) {
@@ -299,8 +336,10 @@ export async function POST(request: NextRequest) {
       Array.isArray(interests) ? interests.join(" ") : "",
       lifeLesson || "",
       typeof regenReason === "string" ? regenReason : "",
-      typeof appearance === "object" && appearance
-        ? JSON.stringify(appearance)
+      sessionCharDesc,
+      profileCharDesc,
+      typeof effectiveAppearance === "object" && effectiveAppearance
+        ? JSON.stringify(effectiveAppearance)
         : "",
     ]
       .filter(Boolean)
@@ -333,11 +372,19 @@ export async function POST(request: NextRequest) {
       interests,
       lifeLesson: lifeLesson || "kindness",
       artStyle: artStyle || "whimsical-watercolor",
-      appearance,
+      appearance: effectiveAppearance,
     });
+    const visualAnchor =
+      parentCharacterLock.length > 2200
+        ? `${parentCharacterLock.slice(0, 2200)}…`
+        : parentCharacterLock;
+    const visualAnchorBlock = visualAnchor
+      ? `\n\nParent-provided visual reference for the main character (keep JSON characterDescription aligned with this look; authoritative for illustrations): ${visualAnchor}`
+      : "";
+    const userPromptBase = `${baseUserPrompt}${visualAnchorBlock}`;
     const userPrompt = trimmedRegenReason
-      ? `${baseUserPrompt}\n\nParent feedback for this regeneration (highest priority to address while keeping the story cozy and age-appropriate): ${trimmedRegenReason}`
-      : baseUserPrompt;
+      ? `${userPromptBase}\n\nParent feedback for this regeneration (highest priority to address while keeping the story cozy and age-appropriate): ${trimmedRegenReason}`
+      : userPromptBase;
 
     const systemPrompt = STORY_SYSTEM_PROMPT
       .replace("[AGE]", String(age || 5))
@@ -398,6 +445,8 @@ export async function POST(request: NextRequest) {
       coverImagePrompt?: string;
       characterDescription?: string;
       secondaryCharacterDescription?: string | null;
+      /** Story-canon modest outfit; verbatim wardrobe lock for every image when present. */
+      illustrationOutfitLock?: string;
     };
     try {
       parsed = JSON.parse(content);
@@ -414,27 +463,48 @@ export async function POST(request: NextRequest) {
     const styleSuffix = getArtStylePrompt(artStyle);
     const isPhotoRealistic = artStyle === "photo-realistic";
 
-    // Character consistency: prepend same description to every image prompt
-    // Parent-selected appearance overrides GPT's characterDescription when provided
-    const appearancePrefix = buildAppearancePrefix(
-      childName,
-      age || 5,
-      pronouns || "",
-      appearance
-    );
+    const storyOutfit =
+      typeof parsed.illustrationOutfitLock === "string"
+        ? parsed.illustrationOutfitLock.trim().slice(0, 1200)
+        : "";
+
+    // Character consistency: prepend same description to every image prompt.
+    // When the model returns illustrationOutfitLock, traits come from appearance lock only
+    // (no default outfit paragraph) so the story-canon outfit is the single wardrobe source.
+    const appearanceLockSuffix = storyOutfit
+      ? buildTraitLockSuffix(effectiveAppearance)
+      : buildAppearanceLockSuffix(pronouns || "", effectiveAppearance);
+
     const isGirl = /she\/her|girl/i.test(pronouns || "");
     const isBoy = /he\/him|boy/i.test(pronouns || "");
     const genderPhrase = isGirl ? "young girl" : isBoy ? "young boy" : "young child";
+    const normalizedAge = Math.min(12, Math.max(1, Number(age || 5)));
+    const ageScaleLockSuffix =
+      normalizedAge >= 10
+        ? ` Age lock: depict the child with clearly ${normalizedAge}-year-old preteen proportions, height, and limb length; do not make the child look younger.`
+        : ` Age lock: depict the child with clearly ${normalizedAge}-year-old child proportions, height, and limb length appropriate for that exact age.`;
     let characterPrefix =
-      appearancePrefix ||
+      (parentCharacterLock && parentCharacterLock.trim()) ||
       parsed.characterDescription?.trim() ||
-      `A ${age || 5}-year-old ${genderPhrase} named ${childName}, children's book illustration style.`;
+      (storyOutfit
+        ? `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features.`
+        : `A ${age || 5}-year-old ${genderPhrase} named ${childName}, human ears, no animal features, wearing the exact same outfit in every image: a pastel top, denim bottoms, white socks, and sneakers.`);
+
+    if (appearanceLockSuffix) {
+      characterPrefix = `${characterPrefix} ${appearanceLockSuffix}`;
+    }
+    characterPrefix = `${characterPrefix}${ageScaleLockSuffix}`;
 
     if (isPhotoRealistic) {
       characterPrefix =
-        characterPrefix.replace(/,\s*children's book illustration style\.?$/i, "") +
-        ". Realistic skin texture, natural skin tones, lifelike hair detail, soft diffused natural lighting on face, photorealistic child portrait quality";
+        characterPrefix +
+        " Realistic skin texture, natural skin tones, lifelike hair detail, soft diffused natural lighting on face, photorealistic child portrait quality.";
     }
+
+    const wardrobeLockSuffix = storyOutfit
+      ? ` Wardrobe lock (story-canon outfit, identical on cover and every page): ${storyOutfit.trim()}. Same garments, colors, layers, footwear, and accessories everywhere. No alternate outfits, seasonal changes, or costume swaps.`
+      : " Wardrobe lock: the child must keep the exact same clothing, colors, layers, footwear, and accessories in the cover and every page. No outfit changes.";
+    const wardrobeReminder = " Use the exact same locked outfit for the child in this scene.";
 
     const secondaryChar =
       parsed.secondaryCharacterDescription?.trim() || null;
@@ -450,21 +520,32 @@ export async function POST(request: NextRequest) {
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
-    // Positive-only phrasing: FLUX safety filters often false-flag prompts that mention
-    // nudity/underwear/bathing even as negations (E005).
-    const imageSafetySuffix =
-      " Wholesome children's picture book illustration, G-rated family audience. Characters in normal modest everyday outfits; cheerful innocent scenes and poses suited to ages 3–8; bright friendly classic storybook mood.";
+    const imageSafetySuffix = isPhotoRealistic
+      ? " Fully clothed child, age-appropriate outfit, G-rated family-safe scene."
+      : " Wholesome children's picture book illustration, G-rated family audience. Characters in normal modest everyday outfits; cheerful innocent scenes and poses suited to ages 3–8; bright friendly classic storybook mood.";
+    const photoRealNegativeSuffix =
+      " No illustration, no cartoon, no anime, no 3D render, no painting, no doll-like face, no oversized eyes, no plastic skin, no fantasy art style.";
+    const photoRealStyleLock =
+      " Ultra-photorealistic cinematic photograph, 35mm lens, natural skin texture, realistic hair strands, accurate child proportions, physically realistic lighting, shallow depth of field, high dynamic range, subtle film grain, color-true daylight.";
+    const bookSeedBase = resolveBaseSeed(
+      [childName, String(age || 5), pronouns || "", parsed.title || "", lifeLesson || ""].join("|")
+    );
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
+    const normalizedCoverPrompt = `${normalizeScenePromptForWardrobe(coverPrompt)}${wardrobeReminder}`;
     const fullCoverPrompt = effectiveSecondaryChar
-      ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`
-      : `${characterPrefix}. ${coverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`;
+      ? isPhotoRealistic
+        ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: The child and creature are two separate beings. ${effectiveSecondaryChar}. ${normalizedCoverPrompt}. ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
+        : `${characterPrefix}${wardrobeLockSuffix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${normalizedCoverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`
+      : isPhotoRealistic
+        ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: ${normalizedCoverPrompt}. ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
+        : `${characterPrefix}${wardrobeLockSuffix}. ${normalizedCoverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`;
 
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
         const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
-          input: replicateFluxProImageInput(fullCoverPrompt),
+          input: replicateFluxProImageInput(fullCoverPrompt, bookSeedBase),
         });
         const result = Array.isArray(output) ? output[0] : output;
         if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
@@ -492,17 +573,25 @@ export async function POST(request: NextRequest) {
         await new Promise((r) => setTimeout(r, 10000)); // 6 per minute throttle limit on replicate.
       }
       const page = parsed.pages[i];
-      const promptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
+      const rawPromptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
+      const normalizedPromptText = normalizeScenePromptForWardrobe(rawPromptText);
+      const promptText = `${normalizedPromptText}${wardrobeReminder}`;
       const includeSecondary =
         effectiveSecondaryChar && page.secondaryCharacterInScene === true;
       const scenePart = includeSecondary
-        ? `${characterPrefix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}. ${styleSuffix}`
-        : `${characterPrefix}. ${promptText}. ${styleSuffix}`;
-      const fullPrompt = `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
+        ? isPhotoRealistic
+          ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}.`
+          : `${characterPrefix}${wardrobeLockSuffix}. The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}. ${styleSuffix}`
+        : isPhotoRealistic
+          ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: ${promptText}.`
+          : `${characterPrefix}${wardrobeLockSuffix}. ${promptText}. ${styleSuffix}`;
+      const fullPrompt = isPhotoRealistic
+        ? `${scenePart} ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
+        : `${scenePart}. ${antiHybridSuffix}${imageSafetySuffix}`;
       for (let attempt = 0; attempt <= 2; attempt++) {
         try {
           const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
-            input: replicateFluxProImageInput(fullPrompt),
+            input: replicateFluxProImageInput(fullPrompt, bookSeedBase + i + 1),
           });
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
@@ -602,9 +691,12 @@ export async function POST(request: NextRequest) {
           interests: interests || [],
           lifeLesson: lifeLesson || "kindness",
           artStyle: artStyle || "whimsical-watercolor",
-          appearance: appearance || {},
+          appearance: effectiveAppearance || appearance || {},
           preferredVoice: preferredVoice && preferredVoice !== "none" ? preferredVoice : "none",
           dedication: dedicationData ?? undefined,
+          childProfileId: childProfileIdRaw || undefined,
+          characterAppearanceDescription: sessionCharDesc || undefined,
+          illustrationOutfitLock: storyOutfit || undefined,
         };
 
         const subscriptionTierAtCreation = featureTier;

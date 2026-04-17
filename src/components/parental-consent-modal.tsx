@@ -61,6 +61,11 @@ export function ParentalConsentModal({ onConsent, onDismiss }: Props) {
                   <p className="mb-2 font-medium">What we collect:</p>
                   <ul className="list-inside list-disc space-y-1 text-muted-foreground">
                     <li>Your child&apos;s name, age, interests, and optional appearance details</li>
+                    <li>
+                      Optional child photo (Magic & Legend): you may upload a photo so we can generate a
+                      detailed written character description for illustrations. The photo is processed
+                      only to produce that description and is not stored.
+                    </li>
                     <li>Story content and AI-generated illustrations featuring your child</li>
                   </ul>
                   <p className="mt-2 font-medium">How we use it:</p>

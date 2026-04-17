@@ -72,5 +72,22 @@ export function validateCreatePayload(body: unknown): ValidationResult {
     }
   }
 
+  const characterAppearanceDescription =
+    typeof b.characterAppearanceDescription === "string"
+      ? b.characterAppearanceDescription.trim()
+      : "";
+  if (characterAppearanceDescription.length > 2500) {
+    return {
+      ok: false,
+      error: "Character appearance description must be 2500 characters or less.",
+    };
+  }
+
+  const childProfileId =
+    typeof b.childProfileId === "string" ? b.childProfileId.trim() : "";
+  if (childProfileId.length > 80) {
+    return { ok: false, error: "Invalid child profile reference." };
+  }
+
   return { ok: true };
 }

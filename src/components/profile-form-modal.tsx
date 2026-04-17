@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   GENDERS,
   INTERESTS,
@@ -24,21 +25,47 @@ export function ProfileFormModal({
   profile,
   onClose,
   onSave,
+  photoAppearanceImport = false,
+  hasParentConsent = false,
 }: {
   profile: ChildProfile | null;
   onClose: () => void;
   onSave: (data: ProfileFormData) => Promise<void>;
+  photoAppearanceImport?: boolean;
+  hasParentConsent?: boolean;
 }) {
   const isEdit = Boolean(profile);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ProfileFormData>({
     name: profile?.name ?? "",
     age: profile?.age ?? 5,
     pronouns: profile?.pronouns ?? "they/them",
     interests: profile?.interests ?? [],
     appearance: profile?.appearance ?? {},
+    appearanceDetailedDescriptionVersion:
+      profile?.appearanceDetailedDescriptionVersion ?? "1",
   });
+  const [detailedDescription, setDetailedDescription] = useState(
+    profile?.appearanceDetailedDescription ?? ""
+  );
+  const [importedFromPhoto, setImportedFromPhoto] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [customInterest, setCustomInterest] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      name: profile?.name ?? "",
+      age: profile?.age ?? 5,
+      pronouns: profile?.pronouns ?? "they/them",
+      interests: profile?.interests ?? [],
+      appearance: profile?.appearance ?? {},
+      appearanceDetailedDescriptionVersion:
+        profile?.appearanceDetailedDescriptionVersion ?? "1",
+    });
+    setDetailedDescription(profile?.appearanceDetailedDescription ?? "");
+    setImportedFromPhoto(false);
+  }, [profile]);
 
   const toggleInterest = (interest: string) => {
     setForm((prev) => ({
@@ -64,6 +91,41 @@ export function ProfileFormModal({
     }));
   };
 
+  const handlePhotoSelected = async (file: File | null) => {
+    if (!file || !photoAppearanceImport || !hasParentConsent) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await fetch("/api/appearance/from-photo", {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        toast.error(typeof data.error === "string" ? data.error : "Could not analyze photo.");
+        return;
+      }
+      const appearance = data.appearance as ProfileFormData["appearance"];
+      const detailed = typeof data.detailedCharacterDescription === "string" ? data.detailedCharacterDescription : "";
+      setForm((prev) => ({
+        ...prev,
+        appearance: {
+          ...prev.appearance,
+          ...(appearance && typeof appearance === "object" ? appearance : {}),
+        },
+      }));
+      if (detailed.trim()) setDetailedDescription(detailed.trim().slice(0, 2500));
+      setImportedFromPhoto(true);
+      toast.success("Photo analyzed. Review the description and traits, then save.");
+    } catch {
+      toast.error("Could not analyze photo.");
+    } finally {
+      setImportBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -75,6 +137,11 @@ export function ProfileFormModal({
       await onSave({
         ...form,
         name: form.name.trim(),
+        appearanceDetailedDescription: detailedDescription.trim() || null,
+        appearanceDetailedDescriptionVersion: form.appearanceDetailedDescriptionVersion ?? "1",
+        ...(importedFromPhoto
+          ? { appearanceDerivedFromPhotoAt: new Date().toISOString() }
+          : {}),
       });
       onClose();
     } finally {
@@ -134,7 +201,7 @@ export function ProfileFormModal({
                 }
                 className="mt-1"
               >
-                {Array.from({ length: 9 }, (_, i) => i + 2).map((n) => (
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                   <option key={n} value={n}>
                     {n} years old
                   </option>
@@ -214,6 +281,58 @@ export function ProfileFormModal({
                   ))}
                 </div>
               )}
+            </div>
+
+            {photoAppearanceImport && hasParentConsent && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <Label className="text-muted-foreground">Photo import (Magic & Legend)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Upload a clear photo of your child. We analyze it once to build a detailed look
+                  description. The photo is not stored.
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    void handlePhotoSelected(f ?? null);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={importBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {importBusy ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Camera className="mr-2 size-4" />
+                  )}
+                  Import from photo
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="detailed-look">Detailed character look (optional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Used for consistent illustrations across books. You can write your own or use photo
+                import above.
+              </p>
+              <textarea
+                id="detailed-look"
+                value={detailedDescription}
+                onChange={(e) => setDetailedDescription(e.target.value.slice(0, 2500))}
+                rows={5}
+                className={cn(
+                  "flex min-h-[120px] w-full rounded-xl border-2 border-input bg-background px-4 py-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                )}
+                placeholder="e.g. round face, warm smile, shoulder-length wavy brown hair, hazel eyes, light freckles, small silver glasses, favorite green hoodie…"
+              />
             </div>
 
             <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3">

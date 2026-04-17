@@ -97,6 +97,7 @@ export async function GET() {
       pdfLevel: tierCapabilities.pdfLevel,
       lessonPackAccess: tierCapabilities.lessonPackAccess,
       commercialUse: tierCapabilities.commercialUse,
+      photoAppearanceImport: tierCapabilities.photoAppearanceImport,
       maxChildProfiles: tierCapabilities.maxChildProfiles,
       childProfileCount: childProfiles.length,
       subscriptionTier: featureTier,

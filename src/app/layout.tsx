@@ -12,6 +12,7 @@ import { Footer } from "@/components/footer";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { AffiliateRefCapture } from "@/components/affiliate-ref-capture";
 import { AffiliateAttribution } from "@/components/affiliate-attribution";
+import { MetaPixel } from "@/components/meta-pixel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -115,6 +116,7 @@ export default function RootLayout({
           />
           <Analytics />
           <GoogleAnalytics />
+          <MetaPixel />
           </ThemeProvider>
         </AuthSessionProvider>
       </body>

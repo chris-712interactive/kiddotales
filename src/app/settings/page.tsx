@@ -22,6 +22,7 @@ import { getBookLimitForTier } from "@/lib/stripe";
 import { getTierCapabilities } from "@/lib/entitlements";
 import { toast } from "sonner";
 import ManageBooksPanel from "@/components/settings/manage-books-panel";
+import { metaSubscriptionPurchaseEventId } from "@/lib/meta-pixel-shared";
 
 type SettingsData = {
   profile: {
@@ -191,6 +192,16 @@ function SettingsContent() {
                   }
                 : prev
             );
+            const w = window as unknown as { fbq?: (...args: unknown[]) => void };
+            if (typeof w.fbq === "function" && sessionId) {
+              const eventName =
+                typeof res.metaEventName === "string" ? res.metaEventName : "Purchase";
+              w.fbq("track", eventName, {
+                value: typeof res.purchaseValue === "number" ? res.purchaseValue : 0,
+                currency:
+                  typeof res.purchaseCurrency === "string" ? res.purchaseCurrency : "USD",
+              }, { eventID: metaSubscriptionPurchaseEventId(sessionId) });
+            }
             window.history.replaceState({}, "", "/settings");
           }
         })

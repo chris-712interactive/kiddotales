@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getStripe, getTierFromPriceId } from "@/lib/stripe";
 import { updateSubscriptionFromStripe } from "@/lib/db";
+import { sendMetaSubscriptionPurchaseEvent } from "@/lib/meta-conversions-api";
 
 /**
  * Confirm a completed checkout session and sync subscription to our DB.
@@ -80,7 +81,24 @@ export async function POST(req: NextRequest) {
       subscriptionTier: tier ?? "spark",
     });
 
-    return NextResponse.json({ success: true, tier: tier ?? "spark" });
+    const amountCents = checkoutSession.amount_total ?? 0;
+    const currency = (checkoutSession.currency || "usd").toUpperCase();
+    const metaEventName = process.env.META_CAPI_EVENT_NAME?.trim() || "Purchase";
+    void sendMetaSubscriptionPurchaseEvent({
+      checkoutSessionId: checkoutSession.id,
+      userId,
+      value: amountCents / 100,
+      currency,
+      customerEmail: session.user.email ?? null,
+    }).catch((e) => console.error("[Stripe confirm-session] Meta CAPI:", e));
+
+    return NextResponse.json({
+      success: true,
+      tier: tier ?? "spark",
+      purchaseValue: amountCents / 100,
+      purchaseCurrency: currency,
+      metaEventName,
+    });
   } catch (err) {
     console.error("[Stripe confirm-session]", err);
     return NextResponse.json(

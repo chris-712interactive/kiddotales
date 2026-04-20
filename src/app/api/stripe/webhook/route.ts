@@ -23,6 +23,7 @@ import {
 import { fulfillPrintOrderToLulu } from "@/lib/print-fulfillment";
 import { revokeFamilySharingForOwner } from "@/lib/family-sharing";
 import { getTierCapabilities } from "@/lib/entitlements";
+import { sendMetaSubscriptionPurchaseEvent } from "@/lib/meta-conversions-api";
 
 /** Stripe webhook handler. Must use raw body for signature verification. */
 export async function POST(req: NextRequest) {
@@ -173,6 +174,21 @@ export async function POST(req: NextRequest) {
           stripePriceId: priceId,
           subscriptionTier: tier ?? "spark",
         });
+
+        const amountCents = session.amount_total ?? 0;
+        const currency = (session.currency || "usd").toUpperCase();
+        const customerEmail =
+          session.customer_email ||
+          session.customer_details?.email ||
+          (await getUserProfile(userId))?.email ||
+          null;
+        void sendMetaSubscriptionPurchaseEvent({
+          checkoutSessionId: session.id,
+          userId,
+          value: amountCents / 100,
+          currency,
+          customerEmail,
+        }).catch((e) => console.error("[Stripe webhook] Meta CAPI:", e));
 
         let affiliateCode = (session.metadata?.affiliateCode as string | undefined) ?? (sub.metadata?.affiliateCode as string | undefined);
         if (affiliateCode) {

@@ -21,6 +21,7 @@ import {
   hasBookUsedVoiceSlot,
   updateBookPagesWithAudio,
   getChildProfileById,
+  getBookById,
 } from "@/lib/db";
 import {
   getVoiceLimitForTier,
@@ -36,6 +37,11 @@ import { validateLifeLessonForAccess } from "@/lib/life-lesson-access";
 import { uploadImageToStorage, uploadAudioToStorage } from "@/lib/supabase-storage";
 import { validateCreatePayload } from "@/lib/validation";
 import {
+  completeGenerationProgress,
+  failGenerationProgress,
+  setGenerationProgress,
+} from "@/lib/generation-progress";
+import {
   normalizeScenePromptForWardrobe,
   buildAppearanceLockSuffix,
   buildTraitLockSuffix,
@@ -48,6 +54,8 @@ const openai = new OpenAI({
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
+
+export const maxDuration = 600;
 
 /** Cover + interior illustrations (BFL FLUX.2 Pro on Replicate). */
 const REPLICATE_FLUX_IMAGE_MODEL =
@@ -100,6 +108,25 @@ function resolveBaseSeed(input: string): number {
     if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return hashStringToSeed(input);
+}
+
+function completedImageSteps(coverImageUrl: string, imageUrls: string[]): number {
+  const completedPageImages = imageUrls.filter((url) => typeof url === "string" && url.length > 0).length;
+  return Math.min(10, 1 + (coverImageUrl ? 1 : 0) + completedPageImages);
+}
+
+const ACTION_BEATS = [
+  "Show clear motion: walking, running, skipping, hopping, dancing, or climbing.",
+  "Show a specific interaction with environment props (splashing water, collecting items, opening a door, pointing to a clue).",
+  "Capture a mid-action story moment, not a posed portrait.",
+  "Use expressive body language and dynamic composition to show what happens in this scene.",
+  "If two characters are present, depict them actively doing something together (helping, exploring, playing, reacting).",
+];
+
+function buildActionDirection(pageIndex: number): string {
+  const primary = ACTION_BEATS[pageIndex % ACTION_BEATS.length];
+  const secondary = ACTION_BEATS[(pageIndex + 2) % ACTION_BEATS.length];
+  return ` Action direction: ${primary} ${secondary} Avoid static side-by-side standing poses unless the story explicitly calls for stillness.`;
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -197,6 +224,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       updateBookId,
+      draftBookId,
+      resumeFromFailure,
       childName,
       age,
       pronouns,
@@ -211,6 +240,8 @@ export async function POST(request: NextRequest) {
       characterAppearanceDescription,
     } = body as {
       updateBookId?: string;
+      draftBookId?: string;
+      resumeFromFailure?: boolean;
       appearance?: CharacterAppearance;
       preferredVoice?: string;
       dedication?: { message?: string; from?: string };
@@ -516,7 +547,68 @@ export async function POST(request: NextRequest) {
 
     // 2. Generate cover image first, then page images (throttled: free tier = 6 req/min)
     console.log("[KiddoTales] OpenAI done, starting Replicate (cover + 8 images, throttled)...");
+    const hasSupabase =
+      process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const draftBookIdSafe = typeof draftBookId === "string" ? draftBookId.trim() : "";
+    const bookId = updateBookId ?? (draftBookIdSafe || crypto.randomUUID());
+    const createdAt = new Date().toISOString();
     let coverImageUrl = "";
+    const imageUrls: string[] = Array.from({ length: parsed.pages.length }, () => "");
+    let draftSaved = false;
+
+    const dedicationData =
+      dedication &&
+      typeof dedication === "object" &&
+      (dedication.message?.trim() || dedication.from?.trim())
+        ? {
+            message: (dedication.message ?? "").trim().slice(0, 200),
+            from: (dedication.from ?? "").trim().slice(0, 80),
+          }
+        : undefined;
+
+    const creationMetadata = {
+      childName,
+      age: age || 5,
+      pronouns: pronouns || "they/them",
+      interests: interests || [],
+      lifeLesson: lifeLesson || "kindness",
+      artStyle: artStyle || "whimsical-watercolor",
+      appearance: effectiveAppearance || appearance || {},
+      preferredVoice: preferredVoice && preferredVoice !== "none" ? preferredVoice : "none",
+      dedication: dedicationData ?? undefined,
+      childProfileId: childProfileIdRaw || undefined,
+      characterAppearanceDescription: sessionCharDesc || undefined,
+      illustrationOutfitLock: storyOutfit || undefined,
+    };
+
+    const makeBookSnapshot = (cover = coverImageUrl, pageImages = imageUrls): BookData => ({
+      id: bookId,
+      title: parsed.title,
+      pages: parsed.pages.map((p: BookPage, idx: number) => ({
+        ...p,
+        imageUrl: pageImages[idx] || undefined,
+      })),
+      createdAt,
+      dedication: dedicationData,
+      coverImageUrl: cover || undefined,
+      creationMetadata,
+    });
+
+    if (hasSupabase) {
+      const existing = resumeFromFailure && updateBookId
+        ? await getBookById(updateBookId, userId)
+        : null;
+      if (existing) {
+        coverImageUrl = existing.coverImageUrl ?? "";
+        for (let i = 0; i < Math.min(existing.pages.length, imageUrls.length); i++) {
+          imageUrls[i] = existing.pages[i]?.imageUrl ?? "";
+        }
+      } else if (!updateBookId) {
+        await saveBookToSupabase(userId, makeBookSnapshot(), bookId, creationMetadata, familyPlan?.featureTier ?? null);
+        draftSaved = true;
+      }
+    }
+    setGenerationProgress(bookId, completedImageSteps(coverImageUrl, imageUrls));
 
     const antiHybridSuffix =
       " The main character is a human child with human ears, human hair, and no horn, no tail, no hooves, no animal features.";
@@ -542,40 +634,49 @@ export async function POST(request: NextRequest) {
         ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: ${normalizedCoverPrompt}. ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
         : `${characterPrefix}${wardrobeLockSuffix}. ${normalizedCoverPrompt}. ${styleSuffix}. ${antiHybridSuffix}${imageSafetySuffix}`;
 
-    for (let attempt = 0; attempt <= 2; attempt++) {
-      try {
-        const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
-          input: replicateFluxProImageInput(fullCoverPrompt, bookSeedBase),
-        });
-        const result = Array.isArray(output) ? output[0] : output;
-        if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
-          coverImageUrl = (result as { url: () => string }).url();
-        } else if (typeof result === "string") {
-          coverImageUrl = result;
-        }
-        break;
-      } catch (repErr) {
-        const repStatus = repErr && typeof repErr === "object" && "status" in repErr ? (repErr as { status: number }).status : undefined;
-        if (repStatus === 429 && attempt < 2) {
-          await new Promise((r) => setTimeout(r, 35000));
-        } else {
-          console.warn("[KiddoTales] Cover image failed, continuing without:", repErr);
+    if (!coverImageUrl) {
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+          const output = await replicate.run(REPLICATE_FLUX_IMAGE_MODEL, {
+            input: replicateFluxProImageInput(fullCoverPrompt, bookSeedBase),
+          });
+          const result = Array.isArray(output) ? output[0] : output;
+          if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
+            coverImageUrl = (result as { url: () => string }).url();
+          } else if (typeof result === "string") {
+            coverImageUrl = result;
+          }
+          if (hasSupabase) {
+            await replaceBook(bookId, userId, makeBookSnapshot(), creationMetadata);
+          }
+          setGenerationProgress(bookId, completedImageSteps(coverImageUrl, imageUrls));
           break;
+        } catch (repErr) {
+          const repStatus = repErr && typeof repErr === "object" && "status" in repErr ? (repErr as { status: number }).status : undefined;
+          if (repStatus === 429 && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 35000));
+          } else {
+            console.warn("[KiddoTales] Cover image failed, continuing without:", repErr);
+            break;
+          }
         }
       }
     }
 
     await new Promise((r) => setTimeout(r, 10000)); // Throttle before page images
 
-    const imageUrls: string[] = [];
     for (let i = 0; i < parsed.pages.length; i++) {
+      if (imageUrls[i]) {
+        continue;
+      }
       if (i > 0) {
         await new Promise((r) => setTimeout(r, 10000)); // 6 per minute throttle limit on replicate.
       }
       const page = parsed.pages[i];
       const rawPromptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
       const normalizedPromptText = normalizeScenePromptForWardrobe(rawPromptText);
-      const promptText = `${normalizedPromptText}${wardrobeReminder}`;
+      const actionDirection = buildActionDirection(i);
+      const promptText = `${normalizedPromptText}${wardrobeReminder}${actionDirection}`;
       const includeSecondary =
         effectiveSecondaryChar && page.secondaryCharacterInScene === true;
       const scenePart = includeSecondary
@@ -595,12 +696,16 @@ export async function POST(request: NextRequest) {
           });
           const result = Array.isArray(output) ? output[0] : output;
           if (result && typeof result === "object" && "url" in result && typeof (result as { url: () => string }).url === "function") {
-            imageUrls.push((result as { url: () => string }).url());
+            imageUrls[i] = (result as { url: () => string }).url();
           } else if (typeof result === "string") {
-            imageUrls.push(result);
+            imageUrls[i] = result;
           } else {
-            imageUrls.push("");
+            imageUrls[i] = "";
           }
+          if (hasSupabase) {
+            await replaceBook(bookId, userId, makeBookSnapshot(), creationMetadata);
+          }
+          setGenerationProgress(bookId, completedImageSteps(coverImageUrl, imageUrls));
           break;
         } catch (repErr) {
           const repStatus = repErr && typeof repErr === "object" && "status" in repErr ? (repErr as { status: number }).status : undefined;
@@ -612,23 +717,24 @@ export async function POST(request: NextRequest) {
           if (repStatus === 429 && attempt < 2) {
             await new Promise((r) => setTimeout(r, 35000));
           } else {
-            throw repErr;
+            if (hasSupabase) {
+              try {
+                await replaceBook(bookId, userId, makeBookSnapshot(), creationMetadata);
+              } catch (saveErr) {
+                console.error("[KiddoTales] Failed to checkpoint partial book after image error:", saveErr);
+              }
+            }
+            const errWithContext = repErr instanceof Error ? repErr : new Error(String(repErr));
+            const contextualErr = errWithContext as Error & { retryBookId?: string; progressBookId?: string };
+            contextualErr.retryBookId = bookId;
+            contextualErr.progressBookId = bookId;
+            failGenerationProgress(bookId, errWithContext.message);
+            throw errWithContext;
           }
         }
       }
     }
 
-    const dedicationData =
-      dedication &&
-      typeof dedication === "object" &&
-      (dedication.message?.trim() || dedication.from?.trim())
-        ? {
-            message: (dedication.message ?? "").trim().slice(0, 200),
-            from: (dedication.from ?? "").trim().slice(0, 80),
-          }
-        : undefined;
-
-    const createdAt = new Date().toISOString();
     let book: BookData = {
       title: parsed.title,
       pages: parsed.pages.map((p: BookPage, i: number) => ({
@@ -640,16 +746,12 @@ export async function POST(request: NextRequest) {
       coverImageUrl: coverImageUrl || undefined,
     };
 
-    const hasSupabase =
-      process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
-
     if (hasSupabase) {
       try {
         if (!familyPlan) familyPlan = await resolveFamilyPlanContext(userId);
         const billingUserId = familyPlan.billingUserId;
         const featureTier = familyPlan.featureTier;
         const { period } = await getBookLimitForUser(billingUserId);
-        const bookId = updateBookId ?? crypto.randomUUID();
         const storagePath = (name: string) => `books/${bookId}/${name}`;
 
         let coverStorageUrl = book.coverImageUrl ?? null;
@@ -684,24 +786,9 @@ export async function POST(request: NextRequest) {
           coverImageData: undefined,
           pages: book.pages.map(({ imageData: _, ...p }) => p),
         };
-        const creationMetadata = {
-          childName,
-          age: age || 5,
-          pronouns: pronouns || "they/them",
-          interests: interests || [],
-          lifeLesson: lifeLesson || "kindness",
-          artStyle: artStyle || "whimsical-watercolor",
-          appearance: effectiveAppearance || appearance || {},
-          preferredVoice: preferredVoice && preferredVoice !== "none" ? preferredVoice : "none",
-          dedication: dedicationData ?? undefined,
-          childProfileId: childProfileIdRaw || undefined,
-          characterAppearanceDescription: sessionCharDesc || undefined,
-          illustrationOutfitLock: storyOutfit || undefined,
-        };
-
         const subscriptionTierAtCreation = featureTier;
 
-        if (updateBookId) {
+        if (updateBookId || resumeFromFailure || draftSaved) {
           await replaceBook(bookId, userId, savedBook, creationMetadata);
         } else {
           await saveBookToSupabase(
@@ -806,9 +893,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    completeGenerationProgress(bookId);
     return NextResponse.json(book);
   } catch (err) {
     const status = err && typeof err === "object" && "status" in err ? (err as { status: number }).status : undefined;
+    const retryBookId =
+      err && typeof err === "object" && "retryBookId" in err
+        ? (err as { retryBookId?: string }).retryBookId
+        : undefined;
+    const progressBookId =
+      err && typeof err === "object" && "progressBookId" in err
+        ? (err as { progressBookId?: string }).progressBookId
+        : retryBookId;
     const message = err instanceof Error ? err.message : String(err);
     const is429 = status === 429;
     const likelyReplicate = is429 && (message.toLowerCase().includes("throttl") || message.toLowerCase().includes("rate"));
@@ -817,7 +913,17 @@ export async function POST(request: NextRequest) {
         ? "Replicate rate limit. Images are throttled on free tier (6/min). Try again in a minute or add a payment method."
         : "OpenAI rate limit. Please wait a minute and try again."
       : message;
+    if (progressBookId) {
+      failGenerationProgress(progressBookId, message);
+    }
     console.error("Generate error:", { status, message, fullError: err });
-    return NextResponse.json({ error: userMessage }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: userMessage,
+        retryBookId,
+        retryable: Boolean(retryBookId),
+      },
+      { status: 500 }
+    );
   }
 }

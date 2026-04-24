@@ -244,6 +244,30 @@ function CreatePageContent() {
   const [currentStep, setCurrentStep] = useState(1);
   const [stepDirection, setStepDirection] = useState<"forward" | "back">("forward");
   const [settingsFetched, setSettingsFetched] = useState(false);
+  const [loadingDraftBookId, setLoadingDraftBookId] = useState<string | null>(null);
+  const [loadingCompletedSteps, setLoadingCompletedSteps] = useState<number>(0);
+  useEffect(() => {
+    if (!isLoading || !loadingDraftBookId) return;
+    const stream = new EventSource(`/api/books/${loadingDraftBookId}/progress`);
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { completedSteps?: number };
+        if (typeof payload.completedSteps === "number") {
+          setLoadingCompletedSteps(Math.max(0, Math.min(10, payload.completedSteps)));
+        }
+      } catch {
+        // Ignore malformed stream payloads
+      }
+    };
+    stream.onerror = () => {
+      stream.close();
+    };
+
+    return () => {
+      stream.close();
+    };
+  }, [isLoading, loadingDraftBookId]);
+
   // Voice step only when plan allows AI voice; when auth but not yet fetched, assume voice step to avoid skipping
   const TOTAL_STEPS =
     settingsFetched
@@ -660,11 +684,14 @@ function CreatePageContent() {
         ...form,
         pronouns: resolvedPronouns || form.pronouns,
         lifeLesson: resolvedLifeLesson || form.lifeLesson,
+        draftBookId: crypto.randomUUID(),
         childProfileId: selectedProfileId ?? undefined,
         characterAppearanceDescription: form.characterAppearanceDescription?.trim()
           ? form.characterAppearanceDescription.trim().slice(0, 2500)
           : undefined,
       };
+      setLoadingDraftBookId(payload.draftBookId);
+      setLoadingCompletedSteps(0);
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -673,6 +700,28 @@ function CreatePageContent() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (err.retryable && typeof err.retryBookId === "string") {
+          const retryRes = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...payload,
+              updateBookId: err.retryBookId,
+              resumeFromFailure: true,
+            }),
+          });
+          if (retryRes.ok) {
+            const retriedBook = await retryRes.json();
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem(PENDING_BOOK_KEY, JSON.stringify(retriedBook));
+            }
+            setBookCount((prev) =>
+              prev ? { ...prev, count: prev.count + 1 } : { count: 1, limit: 3, period: "total" }
+            );
+            router.push(retriedBook.id ? `/book?id=${retriedBook.id}` : "/book");
+            return;
+          }
+        }
         if (res.status === 403) {
           toast.error(err.error || "You've reached your book limit.");
           router.push("/pricing");
@@ -703,6 +752,7 @@ function CreatePageContent() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong.");
       setIsLoading(false);
+      setLoadingDraftBookId(null);
       isSubmittingRef.current = false;
     }
   };
@@ -715,7 +765,7 @@ function CreatePageContent() {
   const creditsRemaining = bookCount ? Math.max(0, bookCount.limit - bookCount.count) : null;
   const outOfCredits = creditsRemaining !== null && creditsRemaining <= 0;
 
-  if (isLoading) return <LoadingScreen showSteps hasAiVoice={!!(form.preferredVoice && form.preferredVoice !== "none")} />;
+  if (isLoading) return <LoadingScreen showSteps hasAiVoice={!!(form.preferredVoice && form.preferredVoice !== "none")} completedStepsOverride={loadingCompletedSteps} />;
 
   if (consentChecked && needsConsent) {
     return (

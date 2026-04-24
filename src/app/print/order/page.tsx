@@ -99,6 +99,7 @@ function PrintOrderForm() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [titleLayout, setTitleLayout] = useState<CoverTitleLayout>(DEFAULT_TITLE_LAYOUT);
   const [savingLayout, setSavingLayout] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
 
   useEffect(() => {
     fetch("/api/print/config")
@@ -311,6 +312,35 @@ function PrintOrderForm() {
     }
   };
 
+  const hasShippingDetails =
+    form.name.trim().length > 0 &&
+    form.street1.trim().length > 0 &&
+    form.city.trim().length > 0 &&
+    form.postcode.trim().length > 0 &&
+    form.country_code.trim().length === 2 &&
+    form.phone_number.trim().length > 0 &&
+    form.email.trim().length > 0;
+
+  const canProceedFromStep = (step: number) => {
+    if (step === 1) return Boolean(selectedStyleId);
+    if (step === 2) return hasShippingDetails;
+    if (step === 3) return Boolean(form.shippingOption);
+    return true;
+  };
+
+  const goToStep = (step: number) => {
+    if (step < 1 || step > 5) return;
+    if (step > currentStep && !canProceedFromStep(currentStep)) {
+      toast.error(
+        currentStep === 2
+          ? "Please complete all required shipping details."
+          : "Please complete this step first."
+      );
+      return;
+    }
+    setCurrentStep(step);
+  };
+
   if (!bookId) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -367,11 +397,45 @@ function PrintOrderForm() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {[
+              "Format",
+              "Shipping details",
+              "Shipping method",
+              "Cover layout",
+              "Quote + downloads",
+            ].map((label, idx) => {
+              const step = idx + 1;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => goToStep(step)}
+                  className={cn(
+                    "flex min-h-10 items-center gap-2 rounded-full px-4 py-1.5 text-sm touch-manipulation transition-all active:scale-[0.98] sm:active:scale-100",
+                    currentStep === step
+                      ? "bg-primary text-primary-foreground shadow-md"
+                      : step < currentStep
+                        ? "bg-primary/20 text-primary hover:bg-primary/30"
+                        : "bg-muted/50 text-muted-foreground"
+                  )}
+                >
+                  <span className="max-w-[8.5rem] truncate sm:max-w-none">{label}</span>
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-current/20 text-xs font-semibold">
+                    {step}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {printStyles.length === 0 ? (
             <p className="text-sm text-amber-700 dark:text-amber-400">
               No book formats are available yet. Ask an admin to add approved styles in Admin → Print.
             </p>
-          ) : (
+          ) : null}
+
+          {currentStep === 1 && printStyles.length > 0 && (
             <>
               <div className="space-y-3">
                 <Label>Book format</Label>
@@ -411,7 +475,7 @@ function PrintOrderForm() {
                 </div>
               </div>
 
-              {previewStyle && previewSources && (
+              {previewStyle && previewSources ? (
                 <div className="rounded-xl border bg-muted/30 p-4">
                   <PrintBookStylePreview
                     style={previewStyle}
@@ -421,117 +485,76 @@ function PrintOrderForm() {
                     hasDedication={previewSources.hasDedication}
                   />
                 </div>
-              )}
+              ) : null}
             </>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="name">Full name</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                autoComplete="name"
-              />
+          {currentStep === 2 && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="name">Full name</Label>
+                <Input id="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} autoComplete="name" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="email">Email (shipping updates)</Label>
+                <Input id="email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} autoComplete="email" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="street1">Street address</Label>
+                <Input id="street1" value={form.street1} onChange={(e) => setForm((f) => ({ ...f, street1: e.target.value }))} autoComplete="street-address" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="street2">Apt / suite (optional)</Label>
+                <Input id="street2" value={form.street2} onChange={(e) => setForm((f) => ({ ...f, street2: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input id="city" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state_code">State / province</Label>
+                <Input id="state_code" value={form.state_code} onChange={(e) => setForm((f) => ({ ...f, state_code: e.target.value }))} placeholder="e.g. CA" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="postcode">Postal code</Label>
+                <Input id="postcode" value={form.postcode} onChange={(e) => setForm((f) => ({ ...f, postcode: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country_code">Country (ISO-2)</Label>
+                <Input
+                  id="country_code"
+                  value={form.country_code}
+                  onChange={(e) => setForm((f) => ({ ...f, country_code: e.target.value.toUpperCase().slice(0, 2) }))}
+                  maxLength={2}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="phone_number">Phone (required by carriers)</Label>
+                <Input id="phone_number" value={form.phone_number} onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))} autoComplete="tel" />
+              </div>
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="email">Email (shipping updates)</Label>
-              <Input
-                id="email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="street1">Street address</Label>
-              <Input
-                id="street1"
-                value={form.street1}
-                onChange={(e) => setForm((f) => ({ ...f, street1: e.target.value }))}
-                autoComplete="street-address"
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="street2">Apt / suite (optional)</Label>
-              <Input
-                id="street2"
-                value={form.street2}
-                onChange={(e) => setForm((f) => ({ ...f, street2: e.target.value }))}
-              />
-            </div>
+          )}
+
+          {currentStep === 3 && (
             <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                value={form.city}
-                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state_code">State / province</Label>
-              <Input
-                id="state_code"
-                value={form.state_code}
-                onChange={(e) => setForm((f) => ({ ...f, state_code: e.target.value }))}
-                placeholder="e.g. CA"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="postcode">Postal code</Label>
-              <Input
-                id="postcode"
-                value={form.postcode}
-                onChange={(e) => setForm((f) => ({ ...f, postcode: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="country_code">Country (ISO-2)</Label>
-              <Input
-                id="country_code"
-                value={form.country_code}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    country_code: e.target.value.toUpperCase().slice(0, 2),
-                  }))
-                }
-                maxLength={2}
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="phone_number">Phone (required by carriers)</Label>
-              <Input
-                id="phone_number"
-                value={form.phone_number}
-                onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))}
-                autoComplete="tel"
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="shipping">Shipping speed</Label>
+              <Label htmlFor="shipping">Shipping method</Label>
               <select
                 id="shipping"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 value={form.shippingOption}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, shippingOption: e.target.value }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, shippingOption: e.target.value }))}
               >
-                {(printConfig?.allowedShippingOptions ?? ["MAIL", "GROUND", "EXPRESS"]).map(
-                  (opt) => (
-                    <option key={opt} value={opt}>
-                      {SHIPPING_LABELS[opt] ?? opt}
-                    </option>
-                  )
-                )}
+                {(printConfig?.allowedShippingOptions ?? ["MAIL", "GROUND", "EXPRESS"]).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {SHIPPING_LABELS[opt] ?? opt}
+                  </option>
+                ))}
               </select>
             </div>
-          </div>
+          )}
 
-          <div className="rounded-lg border bg-background p-4 space-y-3">
+          {currentStep === 4 && (
+            <div className="rounded-lg border bg-background p-4 space-y-3">
             <p className="text-sm font-medium">Cover title layout</p>
             <p className="text-xs text-muted-foreground">
               We auto-place the title from image negative space; adjust if you want.
@@ -591,6 +614,32 @@ function PrintOrderForm() {
                     setTitleLayout((v) => ({ ...v, x: Number(e.target.value) }))
                   }
                 />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTitleLayout((v) => ({ ...v, x: 0 }))}
+                  >
+                    Left
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTitleLayout((v) => ({ ...v, x: 0.5 }))}
+                  >
+                    Center
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTitleLayout((v) => ({ ...v, x: 1 }))}
+                  >
+                    Right
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Vertical position</Label>
@@ -604,6 +653,32 @@ function PrintOrderForm() {
                     setTitleLayout((v) => ({ ...v, y: Number(e.target.value) }))
                   }
                 />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTitleLayout((v) => ({ ...v, y: 0 }))}
+                  >
+                    Top
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTitleLayout((v) => ({ ...v, y: 0.5 }))}
+                  >
+                    Center
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTitleLayout((v) => ({ ...v, y: 1 }))}
+                  >
+                    Bottom
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Title width</Label>
@@ -666,87 +741,104 @@ function PrintOrderForm() {
                 Reset
               </Button>
             </div>
-          </div>
+            </div>
+          )}
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={quoting || !selectedStyleId || printStyles.length === 0}
-              onClick={runQuote}
-            >
-              {quoting ? <Loader2 className="size-4 animate-spin" /> : "Get quote"}
-            </Button>
-            <Button
-              type="button"
-              disabled={
-                checkingOut || !selectedStyleId || printStyles.length === 0
-              }
-              onClick={() => {
-                void runCheckout();
-              }}
-            >
-              {checkingOut ? <Loader2 className="size-4 animate-spin" /> : "Pay with Stripe"}
-            </Button>
-          </div>
-          {quote && (
-            <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-3">
-              <p className="font-medium">
-                Your price: {formatMoney(quote.retailCents, quote.currency)}
-              </p>
-              {quote.wholesaleTotalInclTax != null && (
-                <p className="text-muted-foreground">
-                  Lulu estimate (incl. tax): {quote.wholesaleTotalInclTax}{" "}
-                  {quote.currency} · {quote.pageCount} interior pages
-                </p>
-              )}
-              {quote.previewInteriorPdfUrl && quote.previewCoverPdfUrl ? (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <a
-                    href={quote.previewInteriorPdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    className={cn(
-                      "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl h-9 px-4 text-sm font-medium transition-all",
-                      "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    )}
-                  >
-                    <FileDown className="size-4 shrink-0" />
-                    Interior PDF (Lulu)
-                  </a>
-                  <a
-                    href={quote.previewCoverPdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    className={cn(
-                      "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl h-9 px-4 text-sm font-medium transition-all",
-                      "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    )}
-                  >
-                    <FileDown className="size-4 shrink-0" />
-                    Cover PDF (Lulu)
-                  </a>
+          {currentStep === 5 && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={quoting || !selectedStyleId || printStyles.length === 0}
+                  onClick={runQuote}
+                >
+                  {quoting ? <Loader2 className="size-4 animate-spin" /> : "Submit for quote"}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={checkingOut || !selectedStyleId || printStyles.length === 0}
+                  onClick={() => {
+                    void runCheckout();
+                  }}
+                >
+                  {checkingOut ? <Loader2 className="size-4 animate-spin" /> : "Pay with Stripe"}
+                </Button>
+              </div>
+              {quote ? (
+                <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-3">
+                  <p className="font-medium">
+                    Your quoted price: {formatMoney(quote.retailCents, quote.currency)}
+                  </p>
+                  {quote.wholesaleTotalInclTax != null && (
+                    <p className="text-muted-foreground">
+                      Lulu estimate (incl. tax): {quote.wholesaleTotalInclTax}{" "}
+                      {quote.currency} · {quote.pageCount} interior pages
+                    </p>
+                  )}
+                  {quote.previewInteriorPdfUrl && quote.previewCoverPdfUrl ? (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <a
+                        href={quote.previewInteriorPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className={cn(
+                          "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl h-9 px-4 text-sm font-medium transition-all",
+                          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        )}
+                      >
+                        <FileDown className="size-4 shrink-0" />
+                        Interior PDF (Lulu)
+                      </a>
+                      <a
+                        href={quote.previewCoverPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className={cn(
+                          "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl h-9 px-4 text-sm font-medium transition-all",
+                          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        )}
+                      >
+                        <FileDown className="size-4 shrink-0" />
+                        Cover PDF (Lulu)
+                      </a>
+                    </div>
+                  ) : quote.previewPdfError ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Preview PDFs unavailable: {quote.previewPdfError}
+                    </p>
+                  ) : null}
                 </div>
-              ) : quote.previewPdfError ? (
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  Preview PDFs unavailable: {quote.previewPdfError}
-                </p>
-              ) : null}
-              {quote.previewInteriorPdfUrl && (
-                <p className="text-xs text-muted-foreground">
-                  These files match what we send to Lulu after checkout. Use them to check trim,
-                  bleed, and embedding before you pay.
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Submit for quote to see your quoted price and Lulu template downloads.
                 </p>
               )}
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            You can pay without quoting first; the server recalculates the price at checkout.
-          </p>
+
+          <div className="flex items-center justify-between border-t pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={currentStep <= 1}
+              onClick={() => goToStep(currentStep - 1)}
+            >
+              Back
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={currentStep >= 5 || !canProceedFromStep(currentStep)}
+              onClick={() => goToStep(currentStep + 1)}
+            >
+              Next step
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

@@ -115,18 +115,31 @@ function completedImageSteps(coverImageUrl: string, imageUrls: string[]): number
   return Math.min(10, 1 + (coverImageUrl ? 1 : 0) + completedPageImages);
 }
 
-const ACTION_BEATS = [
-  "Show clear motion: walking, running, skipping, hopping, dancing, or climbing.",
-  "Show a specific interaction with environment props (splashing water, collecting items, opening a door, pointing to a clue).",
-  "Capture a mid-action story moment, not a posed portrait.",
-  "Use expressive body language and dynamic composition to show what happens in this scene.",
-  "If two characters are present, depict them actively doing something together (helping, exploring, playing, reacting).",
+/** Placed *before* the story scene text so the image model weights motion strongly (prompt is long). */
+const PAGE_MOTION_PREFIXES = [
+  "PRIMARY GOAL — MID-ACTION SNAPSHOT: the human child is clearly mid-movement (mid-stride, mid-reach, mid-turn, mid-jump, crouching, leaning, reacting). Hair, hands, and props suggest motion.",
+  "PRIMARY GOAL — INTERACTIVE BEAT: the child is physically engaging the environment (building, stacking, splashing, opening, catching, chasing, hiding behind, pointing at a discovery).",
+  "PRIMARY GOAL — EXPRESSIVE BODY LANGUAGE: big readable pose—weight shifted, arms doing a task, face turned toward the story focus—not a neutral frontal stand.",
+  "PRIMARY GOAL — DEPTH AND MOTION: diagonal or three-quarter composition, foreground and background activity, sense of forward movement through the scene.",
+  "PRIMARY GOAL — SHARED MOMENT: if two beings appear, show one clear cooperative or playful action (passing, helping, racing, both reacting)—not two figures idle in the same frame.",
 ];
 
-function buildActionDirection(pageIndex: number): string {
-  const primary = ACTION_BEATS[pageIndex % ACTION_BEATS.length];
-  const secondary = ACTION_BEATS[(pageIndex + 2) % ACTION_BEATS.length];
-  return ` Action direction: ${primary} ${secondary} Avoid static side-by-side standing poses unless the story explicitly calls for stillness.`;
+function buildMotionPrefix(pageIndex: number, twoCharacters: boolean): string {
+  const p = PAGE_MOTION_PREFIXES[pageIndex % PAGE_MOTION_PREFIXES.length];
+  const pair =
+    twoCharacters && pageIndex % 3 !== 2
+      ? "Both characters have active, distinct poses tied to the same instant of the story. "
+      : "";
+  return `${p} ${pair}`;
+}
+
+function buildMotionSuffix(pageIndex: number): string {
+  const nudges = [
+    "Avoid idle standing, limp arms, blank stares, and flat mugshot framing.",
+    "No posed 'standing beside companion' tableau unless the story text explicitly demands stillness for that beat.",
+    "Emphasize cause-and-effect: something just happened or is about to happen in the same frame.",
+  ];
+  return ` ${nudges[pageIndex % nudges.length]}`;
 }
 
 /** Retry OpenAI request with exponential backoff on rate limit (429). Respects retry-after header when present. */
@@ -393,6 +406,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Progress (SSE): same draft id as the client — seed before OpenAI so /progress never races a missing row.
+    const progressBookIdForStream =
+      typeof updateBookId === "string" && updateBookId.trim()
+        ? updateBookId.trim()
+        : typeof draftBookId === "string" && draftBookId.trim()
+          ? draftBookId.trim()
+          : null;
+    if (progressBookIdForStream) {
+      setGenerationProgress(progressBookIdForStream, 0);
+    }
+
     // 1. Generate story with GPT-4o
     const trimmedRegenReason =
       typeof regenReason === "string" ? regenReason.trim().slice(0, 300) : "";
@@ -625,7 +649,9 @@ export async function POST(request: NextRequest) {
     const coverPrompt =
       parsed.coverImagePrompt ||
       `${parsed.title}. ${(parsed.pages[0]?.illustrationPromptBase ?? parsed.pages[0]?.imagePrompt ?? "")}. Magical storybook cover that captures the whole story.`;
-    const normalizedCoverPrompt = `${normalizeScenePromptForWardrobe(coverPrompt)}${wardrobeReminder}`;
+    const coverMotionPrefix =
+      "Cover: one iconic dynamic moment—clear action, depth, or emotional peak (not a static portrait). ";
+    const normalizedCoverPrompt = `${coverMotionPrefix}${normalizeScenePromptForWardrobe(coverPrompt)}${wardrobeReminder}`;
     const fullCoverPrompt = effectiveSecondaryChar
       ? isPhotoRealistic
         ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: The child and creature are two separate beings. ${effectiveSecondaryChar}. ${normalizedCoverPrompt}. ${antiHybridSuffix}${imageSafetySuffix}${photoRealNegativeSuffix}`
@@ -675,10 +701,11 @@ export async function POST(request: NextRequest) {
       const page = parsed.pages[i];
       const rawPromptText = page.illustrationPromptBase ?? page.imagePrompt ?? "";
       const normalizedPromptText = normalizeScenePromptForWardrobe(rawPromptText);
-      const actionDirection = buildActionDirection(i);
-      const promptText = `${normalizedPromptText}${wardrobeReminder}${actionDirection}`;
       const includeSecondary =
         effectiveSecondaryChar && page.secondaryCharacterInScene === true;
+      const motionPrefix = buildMotionPrefix(i, Boolean(includeSecondary));
+      const motionSuffix = buildMotionSuffix(i);
+      const promptText = `${motionPrefix}${normalizedPromptText}${wardrobeReminder}${motionSuffix}`;
       const scenePart = includeSecondary
         ? isPhotoRealistic
           ? `Character lock: ${characterPrefix}${wardrobeLockSuffix} Style lock: ${photoRealStyleLock} ${styleSuffix}. Scene: The child and creature are two separate beings. ${effectiveSecondaryChar}. ${promptText}.`

@@ -44,14 +44,18 @@ export async function GET(
   const encoder = new TextEncoder();
   const userId = session.user.id;
 
+  // Book row is created only after the story is generated; the client may open SSE
+  // immediately with draftBookId. Never 404 here — bootstrap from DB if present,
+  // otherwise in-memory step 0 until POST /api/generate seeds updates.
   let initial = getGenerationProgress(id);
   if (!initial) {
     const existing = await getBookById(id, userId);
-    if (!existing) {
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+    if (existing) {
+      const bootstrapped = computeProgress(existing);
+      initial = setGenerationProgress(id, bootstrapped.completedSteps, bootstrapped.totalSteps);
+    } else {
+      initial = setGenerationProgress(id, 0, TOTAL_IMAGE_STEPS);
     }
-    const bootstrapped = computeProgress(existing);
-    initial = setGenerationProgress(id, bootstrapped.completedSteps, bootstrapped.totalSteps);
   }
 
   const stream = new ReadableStream<Uint8Array>({

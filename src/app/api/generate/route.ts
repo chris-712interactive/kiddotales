@@ -55,7 +55,8 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
-export const maxDuration = 600;
+// Vercel Hobby plan caps Serverless maxDuration at 300s.
+export const maxDuration = 300;
 
 /** Cover + interior illustrations (BFL FLUX.2 Pro on Replicate). */
 const REPLICATE_FLUX_IMAGE_MODEL =

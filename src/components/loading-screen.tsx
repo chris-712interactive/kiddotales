@@ -36,9 +36,11 @@ const STEP_INTERVAL_MS = 15_000;
 export function LoadingScreen({
   showSteps = false,
   hasAiVoice = false,
+  completedStepsOverride,
 }: {
   showSteps?: boolean;
   hasAiVoice?: boolean;
+  completedStepsOverride?: number;
 }) {
   const GENERATION_STEPS =
     hasAiVoice
@@ -52,6 +54,12 @@ export function LoadingScreen({
   const [startTime] = useState(() => Date.now());
 
   useEffect(() => {
+    if (typeof completedStepsOverride === "number") {
+      setCompletedSteps(
+        Math.max(0, Math.min(completedStepsOverride, GENERATION_STEPS.length))
+      );
+      return;
+    }
     if (!showSteps) return;
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -62,7 +70,7 @@ export function LoadingScreen({
       setCompletedSteps(step);
     }, 2000);
     return () => clearInterval(interval);
-  }, [showSteps, startTime]);
+  }, [showSteps, startTime, completedStepsOverride, GENERATION_STEPS.length]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-[var(--pastel-pink)] via-[var(--pastel-blue)] to-[var(--pastel-mint)] dark:from-[var(--pastel-pink)] dark:via-[var(--pastel-blue)] dark:to-[var(--pastel-mint)]">
